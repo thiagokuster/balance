@@ -397,9 +397,10 @@ export async function enableVault(password: string, iterations = VAULT_ITERATION
   notify();
 }
 
-export async function disableVault(password: string) {
+export async function disableVault(password: string, confirmation: string) {
   load();
   if (!protectedAtRest) return true;
+  if (confirmation !== "ENTENDO") return false;
   await writeQueue;
   const legacy = typeof window === "undefined" ? null : localStorage.getItem(LEGACY_HASH_KEY);
   if (pendingPlain && legacy && (await legacyPasswordMatches(password, legacy))) {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyRemoteStorage,
+  disableVault,
   enableVault,
   flushVaultWrites,
   lockSession,
@@ -98,6 +99,16 @@ describe("dados gravados no navegador", () => {
     await flushVaultWrites();
     expect(localStorage.getItem("financas-pessoais-v1")).toBe(sealed);
     expect(peekFinance().monthlyBudget).toBe(0);
+  });
+
+  it("não remove a senha sem a confirmação", async () => {
+    update((s) => ({ ...s, monthlyBudget: 12 }));
+    await enableVault("senha-forte-ok", 1_000);
+    expect(await disableVault("senha-forte-ok", "entendo")).toBe(false);
+    expect(localStorage.getItem("financas-pessoais-v1")).not.toContain("monthlyBudget");
+    expect(await disableVault("senha-errada", "ENTENDO")).toBe(false);
+    expect(await disableVault("senha-forte-ok", "ENTENDO")).toBe(true);
+    expect(peekFinance().monthlyBudget).toBe(12);
   });
 
   it("avisa quando o navegador recusa a gravação", async () => {

@@ -118,7 +118,7 @@ export function PrivacyButton() {
       toast.error("Digite ENTENDO para confirmar que os dados ficarão sem criptografia.");
       return;
     }
-    if (!(await disableVault(current))) {
+    if (!(await disableVault(current, ack))) {
       toast.error("Senha incorreta.");
       return;
     }

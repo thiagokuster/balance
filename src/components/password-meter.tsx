@@ -13,7 +13,7 @@ export function PasswordMeter({ value }: { value: string }) {
       <p className="text-xs text-muted-foreground">
         {value
           ? LABELS[score]
-          : "Use 12 caracteres ou mais. Sequências e senhas comuns são recusadas."}
+          : "Use 12 caracteres ou mais. Sequências, repetições e senhas comuns são recusadas."}
       </p>
     </div>
   );

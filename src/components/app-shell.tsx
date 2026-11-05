@@ -67,6 +67,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const needsOnboarding = useNeedsOnboarding();
   const backupStale = useBackupReminder();
   const [hideBackup, setHideBackup] = useState(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   useEffect(() => setOpen(false), [path]);
   useEffect(() => {
     if (status !== "open") return;
@@ -137,11 +139,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     </nav>
   );
 
-  const askBackup =
-    !hideBackup &&
-    (backupStale ||
-      (typeof window !== "undefined" && sessionStorage.getItem("saldo-pedir-backup") === "1"));
+  const promptBackup = ready && sessionStorage.getItem("saldo-pedir-backup") === "1";
+  const askBackup = !hideBackup && (backupStale || promptBackup);
 
+  if (!ready) return <div className="min-h-screen bg-background" />;
   if (status === "locked") return <LockScreen />;
   if (needsOnboarding) return <Onboarding />;
 
@@ -179,8 +180,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           {askBackup && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
               <p>
-                Faça um backup em Relatórios. Se esquecer a senha, não existe recuperação, e limpar
-                o navegador apaga o que está só neste computador.
+                {status === "off"
+                  ? "Faça um backup em Relatórios. O arquivo sai criptografado com uma senha só dele, mesmo com o aplicativo sem senha. Limpar o navegador apaga o que está só neste computador."
+                  : "Faça um backup em Relatórios. Se esquecer a senha, não existe recuperação, e limpar o navegador apaga o que está só neste computador."}
               </p>
               <div className="flex gap-2">
                 <Link
