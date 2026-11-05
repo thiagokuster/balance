@@ -1,4 +1,6 @@
 @import "tailwindcss" source(none);
+@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/sora";
 @source "../src";
 @import "tw-animate-css";
 
@@ -68,8 +70,8 @@
 
 :root {
   --radius: 0.875rem;
-  --font-sans: "Manrope", system-ui, sans-serif;
-  --font-display: "Sora", system-ui, sans-serif;
+  --font-sans: "Manrope Variable", system-ui, sans-serif;
+  --font-display: "Sora Variable", system-ui, sans-serif;
   --background: oklch(0.975 0.004 130);
   --foreground: oklch(0.18 0.01 140);
   --card: oklch(1 0 0);

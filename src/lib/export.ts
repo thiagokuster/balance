@@ -100,10 +100,13 @@ export function exportPdf(
   doc.save(`saldo-${from}-a-${to}.pdf`);
 }
 
+export const MAX_BACKUP_BYTES = 8 * 1024 * 1024;
+
 export type BackupContents =
   { kind: "plain"; state: FinanceState } | { kind: "sealed"; payload: VaultPayload };
 
 export function readBackup(text: string): BackupContents | null {
+  if (text.length > MAX_BACKUP_BYTES) return null;
   try {
     const json: unknown = JSON.parse(text.replace(/^\uFEFF/, ""));
     if (typeof json !== "object" || json === null) return null;

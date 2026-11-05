@@ -26,8 +26,8 @@ function contentSecurityPolicy(isProd: boolean) {
   return [
     "default-src 'self'",
     script,
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com data:",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
     "img-src 'self' data: blob:",
     connect,
     "worker-src 'self' blob:",

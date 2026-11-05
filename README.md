@@ -46,13 +46,15 @@ bun run test
 
 ## 🔐 Dados e senha
 
-Sem senha, os lançamentos ficam em texto no `localStorage` deste navegador. Com senha, o Saldo deriva uma chave com PBKDF2-HMAC-SHA-256 (600.000 iterações e sal único) e grava o arquivo com AES-GCM. A senha não sai do computador. Senhas novas têm de 12 a 128 caracteres. Uma senha antiga mais curta ainda abre o cofre, para que você possa trocá-la.
+Sem senha, os lançamentos ficam em texto no `localStorage` deste navegador. Com senha, o Saldo deriva uma chave com PBKDF2-HMAC-SHA-256 (600.000 iterações e sal único) e grava o arquivo com AES-GCM. A senha não sai do computador. Se ela for esquecida, não existe recuperação.
 
-A espera depois de errar a senha vale só na tela aberta e some ao recarregar. Quem copiar o arquivo pode tentar senhas fora do Saldo. O que dificulta isso é a derivação lenta da chave, não o contador da tela.
+No primeiro uso, o Saldo pede uma senha. Continuar sem senha é uma escolha explícita, com um aviso do risco. Senhas novas têm de 12 a 128 caracteres e não podem ser sequências nem senhas comuns. Uma senha antiga mais curta ainda abre o cofre, para que você possa trocá-la.
 
-Limpar os dados do site ou abrir o Saldo em outro computador apaga o que estava só no navegador. Em Relatórios, **Backup** baixa um JSON criptografado e **Restaurar** pede a senha para trazer os dados de volta. Se a senha do aplicativo já estiver ativa, o backup usa essa mesma senha.
+A espera depois de errar a senha fica registrada neste navegador e continua depois de recarregar. Apagar os dados do site zera esse contador. Quem copiar o arquivo ainda pode tentar senhas fora do Saldo. O que dificulta isso é a derivação lenta da chave.
 
-Os cabeçalhos de segurança, inclusive a política de conteúdo, saem do servidor. Um deploy só de arquivos estáticos precisa repetir essa política na hospedagem. Um script de outra origem na mesma página enxerga os dados enquanto o cofre está aberto.
+Limpar os dados do site ou abrir o Saldo em outro computador apaga o que estava só no navegador. Em Relatórios, **Backup** baixa um JSON criptografado e **Restaurar** pede a senha para trazer os dados de volta. Arquivos maiores que 8 MB são recusados. CSV e PDF saem sem criptografia e ficam legíveis na pasta de Downloads. Se a senha do aplicativo já estiver ativa, o backup usa essa mesma senha.
+
+Nada do controle financeiro é enviado a um servidor. As fontes também vêm do próprio aplicativo. Notas escritas nas movimentações ficam no mesmo arquivo local. Os cabeçalhos de segurança, inclusive a política de conteúdo, saem do servidor. A hospedagem precisa executar esse servidor; um site só de arquivos estáticos perde essa política. Um script ou extensão na mesma página enxerga os dados enquanto o cofre está aberto.
 
 ## 📄 Licença
 

@@ -11,12 +11,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordMeter } from "@/components/password-meter";
 import { disableVault, enableVault, lockSession, unlockVault, useVaultStatus } from "@/lib/finance";
+import { passwordIssue } from "@/lib/password";
+import { clearUnlockFailures, noteUnlockFailure, unlockDelaySeconds } from "@/lib/unlock-attempts";
 
 export function LockScreen() {
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
-  const [wait, setWait] = useState(0);
+  const [wait, setWait] = useState(() => unlockDelaySeconds());
   const [failures, setFailures] = useState(0);
 
   useEffect(() => {
@@ -34,11 +37,12 @@ export function LockScreen() {
     setSecret("");
     if (ok) {
       setFailures(0);
+      clearUnlockFailures();
       return;
     }
     const next = failures + 1;
     setFailures(next);
-    setWait(Math.min(60, 2 ** (next - 1)));
+    setWait(noteUnlockFailure());
     toast.error("Senha incorreta.");
   }
 
@@ -50,7 +54,8 @@ export function LockScreen() {
         </div>
         <h1 className="font-display text-2xl font-semibold">Saldo</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          A senha abre os dados criptografados neste navegador. Ela não sai daqui.
+          A senha abre os dados criptografados neste navegador. Ela não sai daqui. Se você esqueceu,
+          não há como recuperar.
         </p>
         <Label className="mt-5 block">Senha</Label>
         <Input
@@ -80,11 +85,13 @@ export function PrivacyButton() {
   const [secret, setSecret] = useState("");
   const [again, setAgain] = useState("");
   const [current, setCurrent] = useState("");
+  const [ack, setAck] = useState("");
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (secret.length < 12 || secret.length > 128) {
-      toast.error("Use uma senha de 12 a 128 caracteres.");
+    const issue = passwordIssue(secret);
+    if (issue) {
+      toast.error(issue);
       return;
     }
     if (secret !== again) {
@@ -93,10 +100,13 @@ export function PrivacyButton() {
     }
     try {
       await enableVault(secret);
+      sessionStorage.setItem("saldo-pedir-backup", "1");
       setSecret("");
       setAgain("");
       setOpen(false);
-      toast.success("Dados criptografados neste navegador");
+      toast.success(
+        "Dados criptografados. Faça um backup: se esquecer a senha, não há recuperação.",
+      );
     } catch {
       toast.error("Não foi possível ativar a senha.");
     }
@@ -104,11 +114,16 @@ export function PrivacyButton() {
 
   async function remove(e: React.FormEvent) {
     e.preventDefault();
+    if (ack !== "ENTENDO") {
+      toast.error("Digite ENTENDO para confirmar que os dados ficarão sem criptografia.");
+      return;
+    }
     if (!(await disableVault(current))) {
       toast.error("Senha incorreta.");
       return;
     }
     setCurrent("");
+    setAck("");
     setOpen(false);
     toast.success("Criptografia removida. Os dados ficam só neste navegador.");
   }
@@ -139,8 +154,8 @@ export function PrivacyButton() {
           {enabled ? (
             <form onSubmit={remove} className="grid gap-3">
               <p className="text-sm text-muted-foreground">
-                Sem a senha, qualquer pessoa com acesso a este navegador consegue ler os
-                lançamentos.
+                Sem a senha, qualquer pessoa com acesso a este navegador lê receitas, despesas e
+                saldos. Não dá para desfazer essa exposição. Digite ENTENDO para confirmar.
               </p>
               <div className="grid gap-1.5">
                 <Label>Senha atual</Label>
@@ -151,7 +166,11 @@ export function PrivacyButton() {
                   autoComplete="current-password"
                 />
               </div>
-              <Button type="submit" variant="destructive">
+              <div className="grid gap-1.5">
+                <Label>Digite ENTENDO</Label>
+                <Input value={ack} onChange={(e) => setAck(e.target.value)} autoComplete="off" />
+              </div>
+              <Button type="submit" variant="destructive" disabled={ack !== "ENTENDO"}>
                 Remover senha
               </Button>
             </form>
@@ -169,6 +188,7 @@ export function PrivacyButton() {
                   onChange={(e) => setSecret(e.target.value)}
                   autoComplete="new-password"
                 />
+                <PasswordMeter value={secret} />
               </div>
               <div className="grid gap-1.5">
                 <Label>Repetir</Label>

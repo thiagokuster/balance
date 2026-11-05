@@ -34,7 +34,9 @@ import {
   useFinance,
   vaultIsOpen,
 } from "@/lib/finance";
-import { exportCsv, exportPdf, readBackup } from "@/lib/export";
+import { exportCsv, exportPdf, MAX_BACKUP_BYTES, readBackup } from "@/lib/export";
+import { passwordIssue } from "@/lib/password";
+import { PasswordMeter } from "@/components/password-meter";
 import { openState, type VaultPayload } from "@/lib/vault";
 
 export const Route = createFileRoute("/relatorios")({
@@ -99,6 +101,7 @@ function Page() {
     }
     if (kind === "csv") exportCsv(s, start, end);
     else exportPdf(s, start, end, summary, categories);
+    toast.message("O arquivo ficou legível na pasta de Downloads.");
   }
 
   async function backup() {
@@ -116,8 +119,9 @@ function Page() {
 
   async function backupWithPassword(e: React.FormEvent) {
     e.preventDefault();
-    if (exportPassword.length < 12 || exportPassword.length > 128) {
-      toast.error("Use uma senha de 12 a 128 caracteres.");
+    const issue = passwordIssue(exportPassword);
+    if (issue) {
+      toast.error(issue);
       return;
     }
     if (exportPassword !== exportAgain) {
@@ -136,6 +140,10 @@ function Page() {
   }
 
   function restore(file: File) {
+    if (file.size > MAX_BACKUP_BYTES) {
+      toast.error("Esse arquivo é grande demais para restaurar.");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const parsed = readBackup(String(reader.result ?? ""));
@@ -219,6 +227,7 @@ function Page() {
                 onChange={(e) => setExportPassword(e.target.value)}
                 autoComplete="new-password"
               />
+              <PasswordMeter value={exportPassword} />
             </div>
             <div className="grid gap-1.5">
               <Label>Repetir</Label>

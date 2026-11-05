@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from "react";
 import { parseFinanceState } from "./finance-schema";
+import { passwordIssue } from "./password";
 import {
   createSession,
   isEncryptedVault,
   legacyPasswordMatches,
-  MIN_PASSWORD_LENGTH,
   openState,
   readSealed,
   sealState,
@@ -117,6 +117,9 @@ export const ACCOUNT_LABEL: Record<AccountType, string> = {
 
 const KEY = "financas-pessoais-v1";
 const LEGACY_HASH_KEY = "financas-pin-hash";
+const DECLINE_KEY = "saldo-sem-senha";
+const BACKUP_AT_KEY = "saldo-ultimo-backup";
+const BACKUP_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 const empty: FinanceState = {
   accounts: [],
   transactions: [],
@@ -133,6 +136,7 @@ let loaded = false;
 let protectedAtRest = false;
 let session: VaultSession | null = null;
 let pendingPlain: FinanceState | null = null;
+let declinedPlain = false;
 let writeQueue: Promise<void> = Promise.resolve();
 const listeners = new Set<() => void>();
 let watchingTabs = false;
@@ -167,6 +171,7 @@ function load() {
   if (loaded || typeof window === "undefined") return;
   loaded = true;
   watchOtherTabs();
+  declinedPlain = localStorage.getItem(DECLINE_KEY) === "1";
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return;
@@ -239,6 +244,43 @@ export function useVaultStatus() {
   return useSyncExternalStore(subscribe, vaultStatus, () => "off" as const);
 }
 
+export function needsOnboarding() {
+  load();
+  return !protectedAtRest && !declinedPlain;
+}
+
+export function useNeedsOnboarding() {
+  return useSyncExternalStore(subscribe, needsOnboarding, () => false);
+}
+
+export function declineProtection() {
+  load();
+  acceptPlaintext();
+  notify();
+}
+
+export function backupIsStale() {
+  load();
+  if (typeof window === "undefined") return false;
+  const raw = localStorage.getItem(BACKUP_AT_KEY);
+  if (!raw) return true;
+  return Date.now() - Number(raw) > BACKUP_STALE_MS;
+}
+
+export function useBackupReminder() {
+  return useSyncExternalStore(
+    subscribe,
+    () => (needsOnboarding() || vaultStatus() === "locked" ? false : backupIsStale()),
+    () => false,
+  );
+}
+
+function markBackup() {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(BACKUP_AT_KEY, String(Date.now()));
+  notify();
+}
+
 export async function unlockVault(password: string, iterations = VAULT_ITERATIONS) {
   load();
   const raw = typeof window === "undefined" ? null : localStorage.getItem(KEY);
@@ -285,13 +327,14 @@ export async function downloadEncryptedBackup(password?: string) {
   load();
   let active = session;
   if (!active) {
-    if (!password || password.length < MIN_PASSWORD_LENGTH || password.length > 128) {
+    if (!password || passwordIssue(password)) {
       throw new Error("vault-password");
     }
     active = await createSession(password);
   }
   const payload = { app: "saldo", version: 2, sealed: await sealState(state, active) };
   download(`saldo-backup-${today()}.json`, JSON.stringify(payload), "application/json");
+  markBackup();
 }
 
 export async function applyRemoteStorage(raw: string | null) {
@@ -344,11 +387,12 @@ export async function applyRemoteStorage(raw: string | null) {
 export async function enableVault(password: string, iterations = VAULT_ITERATIONS) {
   load();
   if (protectedAtRest) return;
-  if (password.length < MIN_PASSWORD_LENGTH || password.length > 128)
-    throw new Error("vault-password");
+  if (passwordIssue(password)) throw new Error("vault-password");
   await writeQueue;
   session = await createSession(password, iterations);
   protectedAtRest = true;
+  declinedPlain = false;
+  if (typeof window !== "undefined") localStorage.removeItem(DECLINE_KEY);
   await persist(state);
   notify();
 }
@@ -365,6 +409,7 @@ export async function disableVault(password: string) {
     pendingPlain = null;
     localStorage.removeItem(LEGACY_HASH_KEY);
     localStorage.setItem(KEY, JSON.stringify(state));
+    acceptPlaintext();
     notify();
     return true;
   }
@@ -383,8 +428,14 @@ export async function disableVault(password: string) {
   state = confirmed;
   localStorage.removeItem(LEGACY_HASH_KEY);
   localStorage.setItem(KEY, JSON.stringify(state));
+  acceptPlaintext();
   notify();
   return true;
+}
+
+function acceptPlaintext() {
+  declinedPlain = true;
+  if (typeof window !== "undefined") localStorage.setItem(DECLINE_KEY, "1");
 }
 
 export function lockSession() {
@@ -410,6 +461,7 @@ export function resetFinanceStore() {
   protectedAtRest = false;
   session = null;
   pendingPlain = null;
+  declinedPlain = false;
   writeQueue = Promise.resolve();
 }
 

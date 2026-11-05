@@ -164,6 +164,7 @@ describe("saída e cabeçalhos", () => {
     const http = securityHeaders("http://127.0.0.1:5173/", false);
     expect(https["Content-Security-Policy"]).toContain("script-src 'self'");
     expect(https["Content-Security-Policy"]).not.toContain("unsafe-eval");
+    expect(https["Content-Security-Policy"]).not.toContain("fonts.googleapis.com");
     expect(https["X-Content-Type-Options"]).toBe("nosniff");
     expect(https["X-Frame-Options"]).toBe("DENY");
     expect(https["Strict-Transport-Security"]).toContain("max-age=31536000");

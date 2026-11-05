@@ -17,8 +17,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { lockSession, useVaultStatus } from "@/lib/finance";
+import { lockSession, useBackupReminder, useNeedsOnboarding, useVaultStatus } from "@/lib/finance";
 import { LockScreen, PrivacyButton } from "@/components/privacy-lock";
+import { Onboarding } from "@/components/onboarding";
 
 const groups = [
   {
@@ -63,6 +64,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [dark, setDark] = useTheme();
   const status = useVaultStatus();
+  const needsOnboarding = useNeedsOnboarding();
+  const backupStale = useBackupReminder();
+  const [hideBackup, setHideBackup] = useState(false);
   useEffect(() => setOpen(false), [path]);
   useEffect(() => {
     if (status !== "open") return;
@@ -133,7 +137,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     </nav>
   );
 
+  const askBackup =
+    !hideBackup &&
+    (backupStale ||
+      (typeof window !== "undefined" && sessionStorage.getItem("saldo-pedir-backup") === "1"));
+
   if (status === "locked") return <LockScreen />;
+  if (needsOnboarding) return <Onboarding />;
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -165,7 +175,36 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
           <span className="font-display font-semibold">Saldo</span>
         </div>
-        <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 md:p-6">
+          {askBackup && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+              <p>
+                Faça um backup em Relatórios. Se esquecer a senha, não existe recuperação, e limpar
+                o navegador apaga o que está só neste computador.
+              </p>
+              <div className="flex gap-2">
+                <Link
+                  to="/relatorios"
+                  className="rounded-md bg-primary px-3 py-1.5 text-primary-foreground"
+                  onClick={() => sessionStorage.removeItem("saldo-pedir-backup")}
+                >
+                  Fazer backup
+                </Link>
+                <button
+                  type="button"
+                  className="text-muted-foreground"
+                  onClick={() => {
+                    sessionStorage.removeItem("saldo-pedir-backup");
+                    setHideBackup(true);
+                  }}
+                >
+                  Agora não
+                </button>
+              </div>
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   );
