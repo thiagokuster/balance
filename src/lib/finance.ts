@@ -66,6 +66,7 @@ export interface Investment {
   name: string;
   kind: "fixa" | "variavel";
   contributions: { date: string; amount: number }[];
+  redemptions?: { date: string; amount: number }[];
   history: { date: string; value: number }[];
 }
 export interface FinanceState {
@@ -528,21 +529,35 @@ export function accountBalance(s: FinanceState, id: string, until = "9999-12-31"
 export const totalBalance = (s: FinanceState, until?: string) =>
   reais(s.accounts.reduce((acc, a) => acc + cents(accountBalance(s, a.id, until)), 0));
 
-/** Latest manual valuation, plus aportes made after that snapshot. */
+function movementCents(
+  items: { date: string; amount: number }[] | undefined,
+  until: string,
+  after?: string,
+) {
+  return (items ?? [])
+    .filter((item) => item.date <= until && (after === undefined || item.date > after))
+    .reduce((total, item) => total + cents(item.amount), 0);
+}
+
+/** Latest manual valuation, plus aportes and minus resgates after that snapshot. */
 export function investmentValue(inv: Investment, until = "9999-12-31") {
   const history = inv.history
     .filter((x) => x.date <= until)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const contributions = inv.contributions.filter((c) => c.date <= until);
-  if (!history.length) return reais(contributions.reduce((a, c) => a + cents(c.amount), 0));
+  const contributed = movementCents(inv.contributions, until);
+  const redeemed = movementCents(inv.redemptions, until);
+  if (!history.length) return reais(contributed - redeemed);
   const last = history[history.length - 1]!;
-  const later = contributions
-    .filter((c) => c.date > last.date)
-    .reduce((a, c) => a + cents(c.amount), 0);
+  const later =
+    movementCents(inv.contributions, until, last.date) -
+    movementCents(inv.redemptions, until, last.date);
   return reais(cents(last.value) + later);
 }
 export const investedTotal = (inv: Investment) =>
-  reais(inv.contributions.reduce((a, c) => a + cents(c.amount), 0));
+  reais(
+    inv.contributions.reduce((total, item) => total + cents(item.amount), 0) -
+      (inv.redemptions ?? []).reduce((total, item) => total + cents(item.amount), 0),
+  );
 export const totalInvested = (s: FinanceState, until?: string) =>
   reais(s.investments.reduce((a, i) => a + cents(investmentValue(i, until)), 0));
 
@@ -663,6 +678,60 @@ export function applyContribution(
         ]
       : s.transfers,
   };
+}
+
+/** Brings money back from an investment into an account. Net worth stays the same. */
+export function applyRedemption(
+  s: FinanceState,
+  investmentId: string,
+  amount: number,
+  date: string,
+  accountId: string,
+): FinanceState {
+  const investment = s.investments.find((item) => item.id === investmentId);
+  const account = s.accounts.find((item) => item.id === accountId);
+  if (!investment || !account || !(amount > 0)) return s;
+  if (cents(amount) > cents(investmentValue(investment))) return s;
+  return {
+    ...s,
+    investments: s.investments.map((item) =>
+      item.id === investmentId
+        ? { ...item, redemptions: [...(item.redemptions ?? []), { date, amount }] }
+        : item,
+    ),
+    transfers: [
+      ...s.transfers,
+      {
+        id: uid(),
+        fromId: `investment:${investmentId}`,
+        toId: account.id,
+        amount,
+        date,
+        note: `Resgate ${investment.name}`.slice(0, 100),
+      },
+    ],
+  };
+}
+
+/** Aportes gravados sem uma conta de origem. O patrimônio deles continua acima do saldo. */
+export function hasUnlinkedContributions(s: FinanceState) {
+  return s.investments.some((investment) => {
+    const linked = s.transfers.filter(
+      (transfer) => transfer.toId === `investment:${investment.id}`,
+    ).length;
+    return investment.contributions.length > linked;
+  });
+}
+
+export function transferPartyName(s: FinanceState, id: string, side: "from" | "to") {
+  if (id.startsWith("card:")) {
+    return `Fatura ${s.cards.find((card) => `card:${card.id}` === id)?.name ?? ""}`.trim();
+  }
+  if (id.startsWith("investment:")) {
+    const name = s.investments.find((item) => `investment:${item.id}` === id)?.name ?? "";
+    return `${side === "from" ? "Resgate" : "Aporte"} ${name}`.trim();
+  }
+  return s.accounts.find((account) => account.id === id)?.name ?? "—";
 }
 
 /** Paying a bill is a transfer: it lowers the account and does not count again as an expense. */

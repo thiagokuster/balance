@@ -19,8 +19,10 @@ import { EmptyState, Money, PageHeader } from "@/components/app-shell";
 import { parseMoney } from "@/lib/money";
 import {
   applyContribution,
+  applyRedemption,
   brl,
   fmtDate,
+  hasUnlinkedContributions,
   investedTotal,
   investmentValue,
   today,
@@ -58,6 +60,9 @@ function Page() {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<Investment["kind"]>("fixa");
   const [aporte, setAporte] = useState<
+    { id: string; amount: string; date: string; accountId: string } | undefined
+  >();
+  const [resgate, setResgate] = useState<
     { id: string; amount: string; date: string; accountId: string } | undefined
   >();
   const [valor, setValor] = useState<{ id: string; amount: string; date: string } | undefined>();
@@ -99,6 +104,27 @@ function Page() {
         : "Aporte registrado. Nenhuma conta foi debitada, então o patrimônio subiu.",
     );
   }
+  function addResgate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resgate) return;
+    const amount = num(resgate.amount);
+    const investment = s.investments.find((item) => item.id === resgate.id);
+    if (!(amount > 0)) {
+      toast.error("Informe o valor do resgate.");
+      return;
+    }
+    if (!resgate.accountId) {
+      toast.error("Escolha a conta que vai receber o resgate.");
+      return;
+    }
+    if (!investment || amount > investmentValue(investment)) {
+      toast.error("O resgate não pode passar do valor do investimento.");
+      return;
+    }
+    update((st) => applyRedemption(st, resgate.id, amount, resgate.date, resgate.accountId));
+    setResgate(undefined);
+    toast.success("Resgate registrado. O valor entrou na conta e saiu do investimento.");
+  }
   function addValor(e: React.FormEvent) {
     e.preventDefault();
     if (!valor) return;
@@ -127,7 +153,7 @@ function Page() {
   function remove(id: string) {
     if (
       !confirm(
-        "Excluir este investimento apaga os aportes e devolve o dinheiro debitado nas contas. Dá para desfazer em seguida.",
+        "Excluir este investimento apaga aportes e resgates e desfaz esses movimentos nas contas. Dá para desfazer em seguida.",
       )
     )
       return;
@@ -135,7 +161,9 @@ function Page() {
     update((st) => ({
       ...st,
       investments: st.investments.filter((i) => i.id !== id),
-      transfers: st.transfers.filter((t) => t.toId !== `investment:${id}`),
+      transfers: st.transfers.filter(
+        (t) => t.toId !== `investment:${id}` && t.fromId !== `investment:${id}`,
+      ),
     }));
     toast("Investimento excluído", {
       duration: 8000,
@@ -154,6 +182,13 @@ function Page() {
           Novo investimento
         </Button>
       </PageHeader>
+      {hasUnlinkedContributions(s) && (
+        <p className="mb-4 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+          Há aportes sem conta de origem. Esse dinheiro não saiu de nenhuma conta, então o
+          patrimônio continua maior do que o saldo. Aportes novos podem debitar uma conta, e o
+          resgate devolve o valor.
+        </p>
+      )}
       {s.investments.length === 0 ? (
         <EmptyState
           icon={TrendingUp}
@@ -183,7 +218,7 @@ function Page() {
                       {brl(value)}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Aportado {brl(contributed)} · rendimento{" "}
+                      Aplicado {brl(contributed)} · rendimento{" "}
                       <Money value={gain} type={gain >= 0 ? "receita" : "despesa"} />
                     </p>
                   </div>
@@ -201,6 +236,20 @@ function Page() {
                       }
                     >
                       Aporte
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setResgate({
+                          id: inv.id,
+                          amount: "",
+                          date: today(),
+                          accountId: s.accounts[0]?.id ?? "",
+                        })
+                      }
+                    >
+                      Resgatar
                     </Button>
                     <Button
                       variant="outline"
@@ -250,21 +299,34 @@ function Page() {
                     </ResponsiveContainer>
                   </div>
                 )}
-                {inv.contributions.length > 0 && (
-                  <ul className="mt-4 divide-y divide-border text-sm">
-                    {[...inv.contributions]
-                      .sort((a, b) => b.date.localeCompare(a.date))
-                      .map((c, i) => (
-                        <li key={`${c.date}-${i}`} className="flex justify-between py-2">
-                          <span className="text-muted-foreground">Aporte · {fmtDate(c.date)}</span>
-                          <span className="font-medium">{brl(c.amount)}</span>
+                {(() => {
+                  const movements = [
+                    ...inv.contributions.map((item) => ({ ...item, kind: "Aporte" as const })),
+                    ...(inv.redemptions ?? []).map((item) => ({
+                      ...item,
+                      kind: "Resgate" as const,
+                    })),
+                  ].sort((a, b) => b.date.localeCompare(a.date));
+                  if (!movements.length) return null;
+                  return (
+                    <ul className="mt-4 divide-y divide-border text-sm">
+                      {movements.map((item, index) => (
+                        <li
+                          key={`${item.kind}-${item.date}-${index}`}
+                          className="flex justify-between py-2"
+                        >
+                          <span className="text-muted-foreground">
+                            {item.kind} · {fmtDate(item.date)}
+                          </span>
+                          <span className="font-medium">{brl(item.amount)}</span>
                         </li>
                       ))}
-                  </ul>
-                )}
+                    </ul>
+                  );
+                })()}
                 <p className="mt-3 text-xs text-muted-foreground">
-                  O saldo usa a última atualização. Aportes feitos depois entram no valor até você
-                  lançar uma nova cotação.
+                  O saldo usa a última atualização. Aportes e resgates feitos depois entram no valor
+                  até você lançar uma nova cotação.
                 </p>
               </div>
             );
@@ -355,6 +417,55 @@ function Page() {
           </form>
         </DialogContent>
       </Dialog>
+      <Dialog open={!!resgate} onOpenChange={(o) => !o && setResgate(undefined)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resgatar para a conta</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={addResgate} className="grid gap-4">
+            <div className="grid gap-1.5">
+              <Label>Valor</Label>
+              <Input
+                inputMode="decimal"
+                value={resgate?.amount ?? ""}
+                onChange={(e) => resgate && setResgate({ ...resgate, amount: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Data</Label>
+              <Input
+                type="date"
+                value={resgate?.date ?? today()}
+                onChange={(e) => resgate && setResgate({ ...resgate, date: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Entra na conta</Label>
+              <Select
+                value={resgate?.accountId ?? ""}
+                onValueChange={(value) => resgate && setResgate({ ...resgate, accountId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolha a conta" />
+                </SelectTrigger>
+                <SelectContent>
+                  {s.accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              O valor sai do investimento e entra na conta. O patrimônio total não muda.
+            </p>
+            <Button type="submit" disabled={s.accounts.length === 0}>
+              Registrar resgate
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!valor} onOpenChange={(o) => !o && setValor(undefined)}>
         <DialogContent>
           <DialogHeader>
@@ -362,8 +473,8 @@ function Page() {
           </DialogHeader>
           <form onSubmit={addValor} className="grid gap-4">
             <p className="text-sm text-muted-foreground">
-              Informe quanto essa posição vale hoje. O rendimento é a diferença para a soma dos
-              aportes.
+              Informe quanto essa posição vale hoje. O rendimento é a diferença para o que ainda
+              está aplicado, já descontando os resgates.
             </p>
             <div className="grid gap-1.5">
               <Label>Valor atual</Label>

@@ -63,6 +63,10 @@ const investment = z.object({
   contributions: z
     .array(z.object({ date, amount: z.number().finite().positive().max(1e12) }))
     .max(5000),
+  redemptions: z
+    .array(z.object({ date, amount: z.number().finite().positive().max(1e12) }))
+    .max(5000)
+    .optional(),
   history: z.array(z.object({ date, value: z.number().finite().min(0).max(1e12) })).max(5000),
 });
 

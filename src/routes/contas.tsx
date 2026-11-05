@@ -36,6 +36,7 @@ import {
   fmtDate,
   today,
   totalBalance,
+  transferPartyName,
   uid,
   update,
   replaceAll,
@@ -148,13 +149,6 @@ function Page() {
       action: { label: "Desfazer", onClick: () => replaceAll(snapshot) },
     });
   }
-  const name = (id: string) =>
-    id.startsWith("card:")
-      ? `Fatura ${s.cards.find((c) => `card:${c.id}` === id)?.name ?? ""}`
-      : id.startsWith("investment:")
-        ? `Aporte ${s.investments.find((i) => `investment:${i.id}` === id)?.name ?? ""}`
-        : (s.accounts.find((x) => x.id === id)?.name ?? "—");
-
   return (
     <>
       <PageHeader title="Contas" subtitle={`Saldo consolidado: ${brl(totalBalance(s))}`}>
@@ -313,25 +307,27 @@ function Page() {
                 <li key={t.id} className="flex items-center gap-3 px-5 py-3 text-sm">
                   <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
                   <span className="flex-1">
-                    {name(t.fromId)} → {name(t.toId)}
+                    {transferPartyName(s, t.fromId, "from")} → {transferPartyName(s, t.toId, "to")}
                   </span>
                   <span className="text-muted-foreground">{fmtDate(t.date)}</span>
                   <Money value={t.amount} className="font-semibold" />
-                  {!t.toId.startsWith("card:") && !t.toId.startsWith("investment:") && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() =>
-                        update((st) => ({
-                          ...st,
-                          transfers: st.transfers.filter((y) => y.id !== t.id),
-                        }))
-                      }
-                      aria-label="Excluir"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
+                  {!t.toId.startsWith("card:") &&
+                    !t.toId.startsWith("investment:") &&
+                    !t.fromId.startsWith("investment:") && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() =>
+                          update((st) => ({
+                            ...st,
+                            transfers: st.transfers.filter((y) => y.id !== t.id),
+                          }))
+                        }
+                        aria-label="Excluir"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                 </li>
               ))}
           </ul>

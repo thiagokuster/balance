@@ -3,15 +3,18 @@ import {
   accountBalance,
   addMonths,
   applyContribution,
+  applyRedemption,
   applyInvoicePayment,
   calendarEvents,
   cardInvoices,
+  hasUnlinkedContributions,
   investmentValue,
   invoiceMonth,
   monthTotals,
   netWorth,
   spendingAlerts,
   today,
+  transferPartyName,
   type FinanceState,
   type Investment,
 } from "./finance";
@@ -170,6 +173,40 @@ describe("finance rules", () => {
     const outside = applyContribution(state, "i", 500, "2026-11-05");
     expect(accountBalance(outside, "a")).toBe(accountBalance(state, "a"));
     expect(netWorth(outside)).toBe(netWorth(state) + 500);
+    expect(hasUnlinkedContributions(outside)).toBe(true);
+    expect(hasUnlinkedContributions(funded)).toBe(false);
+  });
+  it("returns a redemption to the account without changing net worth", () => {
+    const state: FinanceState = {
+      ...base,
+      investments: [
+        {
+          id: "i",
+          name: "CDB",
+          kind: "fixa",
+          contributions: [{ date: "2026-01-01", amount: 100 }],
+          history: [{ date: "2026-02-01", value: 110 }],
+        },
+      ],
+    };
+    const funded = applyContribution(state, "i", 500, "2026-11-01", "a");
+    const worth = netWorth(funded);
+    const redeemed = applyRedemption(funded, "i", 200, "2026-11-05", "a");
+    expect(accountBalance(redeemed, "a")).toBe(accountBalance(funded, "a") + 200);
+    expect(investmentValue(redeemed.investments[0]!)).toBe(
+      investmentValue(funded.investments[0]!) - 200,
+    );
+    expect(netWorth(redeemed)).toBe(worth);
+    expect(applyRedemption(redeemed, "i", 10_000, "2026-11-06", "a")).toBe(redeemed);
+    expect(transferPartyName(redeemed, "investment:i", "to")).toBe("Aporte CDB");
+    expect(transferPartyName(redeemed, "investment:i", "from")).toBe("Resgate CDB");
+    expect(
+      transferPartyName(
+        { ...redeemed, cards: [{ id: "c", name: "Visa", limit: 1, closingDay: 1, dueDay: 2 }] },
+        "card:c",
+        "to",
+      ),
+    ).toBe("Fatura Visa");
   });
   it("labels invoices that have not closed yet as future", () => {
     const card = { id: "c", name: "Visa", limit: 1000, closingDay: 28, dueDay: 8 };

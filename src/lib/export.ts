@@ -1,6 +1,14 @@
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
-import { brl, download, fmtDate, toCSV, type FinanceState, type Transaction } from "./finance";
+import {
+  brl,
+  download,
+  fmtDate,
+  toCSV,
+  transferPartyName,
+  type FinanceState,
+  type Transaction,
+} from "./finance";
 import { parseFinanceState } from "./finance-schema";
 import { isEncryptedVault, type VaultPayload } from "./vault";
 
@@ -32,10 +40,8 @@ export function exportCsv(s: FinanceState, from: string, to: string) {
     ]);
   }
   for (const tr of s.transfers.filter((t) => t.date >= from && t.date <= to)) {
-    const fromName = s.accounts.find((a) => a.id === tr.fromId)?.name ?? tr.fromId;
-    const toName = tr.toId.startsWith("card:")
-      ? `Fatura ${s.cards.find((c) => `card:${c.id}` === tr.toId)?.name ?? ""}`
-      : (s.accounts.find((a) => a.id === tr.toId)?.name ?? tr.toId);
+    const fromName = transferPartyName(s, tr.fromId, "from");
+    const toName = transferPartyName(s, tr.toId, "to");
     rows.push([
       fmtDate(tr.date),
       "transferência",

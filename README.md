@@ -22,7 +22,7 @@ Ainda não há uma versão publicada. Depois de rodar localmente, abra [http://1
 - Cartões, faturas e parcelas
 - Orçamento mensal e limites por categoria
 - Metas, reserva de emergência e compras planejadas
-- Investimentos manuais
+- Investimentos manuais, com aporte e resgate para uma conta
 - Relatórios em CSV e PDF
 - Backup criptografado em JSON e restauração
 - Calendário financeiro
@@ -53,6 +53,8 @@ No primeiro uso, o Saldo pede uma senha. Continuar sem senha é uma escolha expl
 A espera depois de errar a senha fica registrada neste navegador e continua depois de recarregar. Apagar os dados do site zera esse contador. Quem copiar o arquivo ainda pode tentar senhas fora do Saldo. O que dificulta isso é a derivação lenta da chave.
 
 Limpar os dados do site ou abrir o Saldo em outro computador apaga o que estava só no navegador. Em Relatórios, **Backup** baixa um JSON criptografado e **Restaurar** pede a senha para trazer os dados de volta. O arquivo é criptografado mesmo quando o aplicativo está sem senha; nesse caso a senha vale só para o backup. Arquivos maiores que 8 MB são recusados. CSV e PDF saem sem criptografia e ficam legíveis na pasta de Downloads. Se a senha do aplicativo já estiver ativa, o backup usa essa mesma senha.
+
+Um aporte pode sair de uma conta, e o resgate devolve esse valor para uma conta. Aportes antigos, gravados sem conta de origem, não foram alterados: o dinheiro continua só no investimento e o patrimônio fica maior do que o saldo das contas.
 
 Nada do controle financeiro é enviado a um servidor. As fontes também vêm do próprio aplicativo. Notas escritas nas movimentações ficam no mesmo arquivo local. Os cabeçalhos de segurança, inclusive a política de conteúdo, saem do servidor. A hospedagem precisa executar esse servidor; um site só de arquivos estáticos perde essa política. Um script ou extensão na mesma página enxerga os dados enquanto o cofre está aberto.
 
