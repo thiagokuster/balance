@@ -54,10 +54,14 @@ export default {
       return withSecurityHeaders(normalized, request, import.meta.env.PROD);
     } catch (error) {
       console.error(error);
-      return withSecurityHeaders(new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      }), request, import.meta.env.PROD);
+      return withSecurityHeaders(
+        new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+        request,
+        import.meta.env.PROD,
+      );
     }
   },
 };

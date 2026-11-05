@@ -1,7 +1,11 @@
 /** Response headers for ASVS 5.0 web frontend controls. Production CSP stays strict; Vite HMR needs a looser policy. */
 export function securityHeaders(requestUrl: string, isProd: boolean): Record<string, string> {
   let https = false;
-  try { https = new URL(requestUrl).protocol === "https:"; } catch { https = false; }
+  try {
+    https = new URL(requestUrl).protocol === "https:";
+  } catch {
+    https = false;
+  }
   const headers: Record<string, string> = {
     "Content-Security-Policy": contentSecurityPolicy(isProd),
     "X-Content-Type-Options": "nosniff",
@@ -36,7 +40,13 @@ function contentSecurityPolicy(isProd: boolean) {
 
 export function withSecurityHeaders(response: Response, request: Request, isProd: boolean) {
   const headers = new Headers(response.headers);
-  for (const [name, value] of Object.entries(securityHeaders(request.url, isProd))) headers.set(name, value);
-  if ((headers.get("content-type") ?? "").includes("text/html")) headers.set("Cache-Control", "no-store");
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  for (const [name, value] of Object.entries(securityHeaders(request.url, isProd)))
+    headers.set(name, value);
+  if ((headers.get("content-type") ?? "").includes("text/html"))
+    headers.set("Cache-Control", "no-store");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }

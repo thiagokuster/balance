@@ -1,6 +1,17 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { enableVault, flushVaultWrites, lockSession, peekFinance, resetFinanceStore, toCSV, unlockVault, update } from "./finance";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  applyRemoteStorage,
+  enableVault,
+  flushVaultWrites,
+  lockSession,
+  peekFinance,
+  resetFinanceStore,
+  toCSV,
+  unlockVault,
+  update,
+} from "./finance";
 import { parseFinanceState } from "./finance-schema";
+import { readBackup } from "./export";
 import { securityHeaders } from "./security-headers";
 import { createSession, legacyPasswordMatches, openState, sealState } from "./vault";
 
@@ -29,12 +40,26 @@ describe("dados gravados no navegador", () => {
     expect(parsed && "extra" in parsed).toBe(false);
   });
 
+  it("aceita um backup e recusa arquivo inválido", () => {
+    const raw = JSON.stringify({ app: "saldo", version: 1, state: blank });
+    const opened = readBackup(`\uFEFF${raw}`);
+    expect(opened?.kind).toBe("plain");
+    if (opened?.kind === "plain") expect(opened.state.accounts).toEqual([]);
+    expect(readBackup("{")).toBeNull();
+    expect(
+      readBackup(JSON.stringify({ app: "saldo", state: { accounts: [{ id: "x" }] } })),
+    ).toBeNull();
+  });
+
   it("criptografa o estado e recusa a senha errada", async () => {
     const session = await createSession("senha-forte", 10_000);
-    const sealed = await sealState({
-      ...blank,
-      accounts: [{ id: "a1", name: "Nubank", type: "corrente", initialBalance: 10 }],
-    }, session);
+    const sealed = await sealState(
+      {
+        ...blank,
+        accounts: [{ id: "a1", name: "Nubank", type: "corrente", initialBalance: 10 }],
+      },
+      session,
+    );
     expect(JSON.stringify(sealed)).not.toContain("Nubank");
     const opened = await openState(sealed, "senha-forte");
     expect(opened.state.accounts[0]?.name).toBe("Nubank");
@@ -44,18 +69,28 @@ describe("dados gravados no navegador", () => {
   it("não grava a descrição em texto puro depois da senha", async () => {
     update((s) => ({
       ...s,
-      transactions: [...s.transactions, {
-        id: "t1", description: "Mercado secreto", amount: 10, type: "despesa", category: "Alimentação",
-        accountId: "a1", date: "2026-11-03", paymentMethod: "Pix", status: "pago",
-      }],
+      transactions: [
+        ...s.transactions,
+        {
+          id: "t1",
+          description: "Mercado secreto",
+          amount: 10,
+          type: "despesa",
+          category: "Alimentação",
+          accountId: "a1",
+          date: "2026-11-03",
+          paymentMethod: "Pix",
+          status: "pago",
+        },
+      ],
     }));
-    await enableVault("senha-forte", 10_000);
+    await enableVault("senha-forte-ok", 10_000);
     const stored = localStorage.getItem("financas-pessoais-v1") ?? "";
     expect(stored).not.toContain("Mercado secreto");
     resetFinanceStore();
     expect(peekFinance().transactions).toEqual([]);
     expect(await unlockVault("outra-senha")).toBe(false);
-    expect(await unlockVault("senha-forte")).toBe(true);
+    expect(await unlockVault("senha-forte-ok")).toBe(true);
     expect(peekFinance().transactions[0]?.description).toBe("Mercado secreto");
     lockSession();
     const sealed = localStorage.getItem("financas-pessoais-v1");
@@ -65,13 +100,48 @@ describe("dados gravados no navegador", () => {
     expect(peekFinance().monthlyBudget).toBe(0);
   });
 
+  it("avisa quando o navegador recusa a gravação", async () => {
+    await enableVault("senha-forte-ok", 1_000);
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    let failed = false;
+    window.addEventListener("saldo-persist-error", () => {
+      failed = true;
+    });
+    try {
+      update((s) => ({ ...s, monthlyBudget: 15 }));
+      await flushVaultWrites().catch(() => undefined);
+      expect(failed).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("aplica a cópia gravada por outra aba", async () => {
+    update((s) => ({ ...s, monthlyBudget: 10 }));
+    await enableVault("senha-forte-ok", 1_000);
+    await flushVaultWrites();
+    const otherTab = localStorage.getItem("financas-pessoais-v1");
+    update((s) => ({ ...s, monthlyBudget: 80 }));
+    await flushVaultWrites();
+    await applyRemoteStorage(otherTab);
+    expect(peekFinance().monthlyBudget).toBe(10);
+  });
+
   it("troca o hash antigo por um cofre na primeira abertura", async () => {
     const password = "senha-antiga";
-    localStorage.setItem("financas-pessoais-v1", JSON.stringify({
-      ...blank,
-      accounts: [{ id: "a1", name: "Carteira", type: "dinheiro", initialBalance: 20 }],
-    }));
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`saldo:${password}`));
+    localStorage.setItem(
+      "financas-pessoais-v1",
+      JSON.stringify({
+        ...blank,
+        accounts: [{ id: "a1", name: "Carteira", type: "dinheiro", initialBalance: 20 }],
+      }),
+    );
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(`saldo:${password}`),
+    );
     const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
     localStorage.setItem("financas-pin-hash", hex);
     expect(await legacyPasswordMatches(password, hex)).toBe(true);

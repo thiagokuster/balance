@@ -6,23 +6,49 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, Money, PageHeader } from "@/components/app-shell";
+import { parseMoney } from "@/lib/money";
 import { TransactionDialog } from "@/components/transaction-dialog";
-import { accountBalance, brl, cardAvailable, cardInvoices, fmtDate, monthLabel, payInvoice, today, uid, update, useFinance, type Card } from "@/lib/finance";
+import {
+  accountBalance,
+  brl,
+  cardAvailable,
+  cardInvoices,
+  fmtDate,
+  monthLabel,
+  payInvoice,
+  replaceAll,
+  today,
+  uid,
+  update,
+  useFinance,
+  type Card,
+} from "@/lib/finance";
 
 export const Route = createFileRoute("/cartoes")({
-  head: () => ({ meta: [
-    { title: "Cartões — Saldo" },
-    { name: "description", content: "Limites, faturas, parcelas e histórico dos seus cartões." },
-    { property: "og:title", content: "Cartões — Saldo" },
-    { property: "og:description", content: "Limites, faturas, parcelas e histórico dos seus cartões." },
-  ] }),
+  head: () => ({
+    meta: [
+      { title: "Cartões — Saldo" },
+      { name: "description", content: "Limites, faturas, parcelas e histórico dos seus cartões." },
+      { property: "og:title", content: "Cartões — Saldo" },
+      {
+        property: "og:description",
+        content: "Limites, faturas, parcelas e histórico dos seus cartões.",
+      },
+    ],
+  }),
   component: Page,
 });
 
-const num = (v: string) => Number(v.replace(",", "."));
+const num = parseMoney;
 const day = (v: string) => Math.min(31, Math.max(1, Math.round(Number(v) || 1)));
 
 function Page() {
@@ -42,21 +68,46 @@ function Page() {
   }
   function openEdit(card: Card) {
     setEdit(card);
-    setForm({ name: card.name, limit: String(card.limit), closingDay: String(card.closingDay), dueDay: String(card.dueDay) });
+    setForm({
+      name: card.name,
+      limit: String(card.limit),
+      closingDay: String(card.closingDay),
+      dueDay: String(card.dueDay),
+    });
     setOpen(true);
   }
   function save(e: React.FormEvent) {
     e.preventDefault();
     const limit = num(form.limit);
-    if (!form.name.trim() || form.name.length > 40) { toast.error("Informe o nome do cartão."); return; }
-    if (!(limit > 0)) { toast.error("Informe o limite."); return; }
-    const next = { name: form.name.trim(), limit, closingDay: day(form.closingDay), dueDay: day(form.dueDay) };
-    update((st) => ({ ...st, cards: edit ? st.cards.map((c) => c.id === edit.id ? { ...c, ...next } : c) : [...st.cards, { id: uid(), ...next }] }));
+    if (!form.name.trim() || form.name.length > 40) {
+      toast.error("Informe o nome do cartão.");
+      return;
+    }
+    if (!(limit > 0)) {
+      toast.error("Informe o limite.");
+      return;
+    }
+    const next = {
+      name: form.name.trim(),
+      limit,
+      closingDay: day(form.closingDay),
+      dueDay: day(form.dueDay),
+    };
+    update((st) => ({
+      ...st,
+      cards: edit
+        ? st.cards.map((c) => (c.id === edit.id ? { ...c, ...next } : c))
+        : [...st.cards, { id: uid(), ...next }],
+    }));
     setOpen(false);
     toast.success(edit ? "Cartão atualizado" : "Cartão cadastrado");
   }
   function remove(card: Card) {
-    if (!confirm(`Excluir ${card.name} e as compras lançadas nele?`)) return;
+    if (
+      !confirm(`Excluir ${card.name} apaga as compras lançadas nele. Dá para desfazer em seguida.`)
+    )
+      return;
+    const snapshot = s;
     update((st) => ({
       ...st,
       cards: st.cards.filter((c) => c.id !== card.id),
@@ -64,12 +115,22 @@ function Page() {
       transfers: st.transfers.filter((t) => t.toId !== `card:${card.id}`),
     }));
     if (selected === card.id) setSelected(undefined);
+    toast("Cartão excluído", {
+      duration: 8000,
+      action: { label: "Desfazer", onClick: () => replaceAll(snapshot) },
+    });
   }
   function confirmPay(e: React.FormEvent) {
     e.preventDefault();
     if (!pay) return;
-    if (!payAccount) { toast.error("Escolha a conta que vai pagar a fatura."); return; }
-    if (!payInvoice(pay.cardId, pay.month, payAccount, payDate)) { toast.error("Não há valor pendente nessa fatura."); return; }
+    if (!payAccount) {
+      toast.error("Escolha a conta que vai pagar a fatura.");
+      return;
+    }
+    if (!payInvoice(pay.cardId, pay.month, payAccount, payDate)) {
+      toast.error("Não há valor pendente nessa fatura.");
+      return;
+    }
     setPay(undefined);
     toast.success("Fatura paga. O valor saiu da conta e não entrou de novo como despesa.");
   }
@@ -86,27 +147,53 @@ function Page() {
 
   return (
     <>
-      <PageHeader title="Cartões" subtitle="Limite, faturas e parcelas. Pagar a fatura não conta outra vez como despesa.">
-        <Button onClick={openNew}><Plus className="h-4 w-4" />Novo cartão</Button>
+      <PageHeader
+        title="Cartões"
+        subtitle="Limite, faturas e parcelas. Pagar a fatura não conta outra vez como despesa."
+      >
+        <Button onClick={openNew}>
+          <Plus className="h-4 w-4" />
+          Novo cartão
+        </Button>
       </PageHeader>
-      {s.cards.length === 0 ? <EmptyState icon={CreditCard} title="Nenhum cartão" text="Cadastre um cartão para lançar compras, acompanhar o limite e as faturas." /> : (
+      {s.cards.length === 0 ? (
+        <EmptyState
+          icon={CreditCard}
+          title="Nenhum cartão"
+          text="Cadastre um cartão para lançar compras, acompanhar o limite e as faturas."
+        />
+      ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {s.cards.map((c) => {
             const available = cardAvailable(s, c);
             const active = selected === c.id;
             return (
-              <button key={c.id} type="button" onClick={() => setSelected(active ? undefined : c.id)} className={`panel panel-glow p-5 text-left transition ${active ? "ring-2 ring-primary" : "hover:bg-muted/40"}`}>
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelected(active ? undefined : c.id)}
+                className={`panel panel-glow p-5 text-left transition ${active ? "ring-2 ring-primary" : "hover:bg-muted/40"}`}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-medium">{c.name}</p>
-                    <p className="text-xs text-muted-foreground">Fecha dia {c.closingDay} · vence dia {c.dueDay}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Fecha dia {c.closingDay} · vence dia {c.dueDay}
+                    </p>
                   </div>
                   <CreditCard className="h-5 w-5 text-primary" />
                 </div>
-                <p className="mt-4 font-display text-2xl font-semibold tabular-nums">{brl(available)}</p>
+                <p className="mt-4 font-display text-2xl font-semibold tabular-nums">
+                  {brl(available)}
+                </p>
                 <p className="text-xs text-muted-foreground">disponível de {brl(c.limit)}</p>
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full bg-primary" style={{ width: `${Math.min(100, Math.max(0, ((c.limit - available) / c.limit) * 100))}%` }} />
+                  <div
+                    className="h-full bg-primary"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, ((c.limit - available) / c.limit) * 100))}%`,
+                    }}
+                  />
                 </div>
               </button>
             );
@@ -119,9 +206,21 @@ function Page() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-xl font-semibold">{card.name}</h2>
             <div className="flex gap-2">
-              <TransactionDialog defaults={{ paymentMethod: "Cartão de crédito", cardId: card.id }} trigger={<Button variant="outline"><Plus className="h-4 w-4" />Nova compra</Button>} />
-              <Button variant="outline" onClick={() => openEdit(card)}>Editar</Button>
-              <Button variant="ghost" onClick={() => remove(card)} aria-label="Excluir cartão"><Trash2 className="h-4 w-4 text-expense" /></Button>
+              <TransactionDialog
+                defaults={{ paymentMethod: "Cartão de crédito", cardId: card.id }}
+                trigger={
+                  <Button variant="outline">
+                    <Plus className="h-4 w-4" />
+                    Nova compra
+                  </Button>
+                }
+              />
+              <Button variant="outline" onClick={() => openEdit(card)}>
+                Editar
+              </Button>
+              <Button variant="ghost" onClick={() => remove(card)} aria-label="Excluir cartão">
+                <Trash2 className="h-4 w-4 text-expense" />
+              </Button>
             </div>
           </div>
 
@@ -137,7 +236,9 @@ function Page() {
                     <li key={sorted[0]?.groupId} className="flex items-center gap-3 py-3 text-sm">
                       <div className="min-w-0 flex-1">
                         <p className="font-medium">{g.description}</p>
-                        <p className="text-xs text-muted-foreground">{paid} de {sorted.length} parcelas pagas</p>
+                        <p className="text-xs text-muted-foreground">
+                          {paid} de {sorted.length} parcelas pagas
+                        </p>
                       </div>
                       <Money value={total} type="despesa" className="font-semibold" />
                     </li>
@@ -148,26 +249,55 @@ function Page() {
           )}
 
           <div className="grid gap-4">
-            {invoices.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma compra neste cartão ainda.</p>}
+            {invoices.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhuma compra neste cartão ainda.</p>
+            )}
             {invoices.map((inv) => (
               <div key={inv.month} className="panel overflow-hidden">
                 <div className="flex flex-wrap items-center gap-3 p-5">
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">Fatura {monthLabel(inv.month)}</p>
-                    <p className="text-xs text-muted-foreground">{inv.pending > 0 ? `${brl(inv.pending)} em aberto` : "Sem valor pendente"}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {inv.pending > 0 ? `${brl(inv.pending)} em aberto` : "Sem valor pendente"}
+                    </p>
                   </div>
-                  <Badge variant={inv.status === "paga" ? "secondary" : "outline"} className={inv.status === "fechada" ? "border-warning text-warning" : ""}>
-                    {inv.status === "aberta" ? "Aberta" : inv.status === "fechada" ? "Fechada" : "Paga"}
+                  <Badge
+                    variant={inv.status === "paga" ? "secondary" : "outline"}
+                    className={inv.status === "fechada" ? "border-warning text-warning" : ""}
+                  >
+                    {inv.status === "aberta"
+                      ? "Aberta"
+                      : inv.status === "fechada"
+                        ? "Fechada"
+                        : "Paga"}
                   </Badge>
                   <Money value={inv.total} type="despesa" className="font-semibold" />
-                  {inv.pending > 0 && <Button size="sm" onClick={() => { setPay({ cardId: card.id, month: inv.month, amount: inv.pending }); setPayAccount(s.accounts[0]?.id ?? ""); setPayDate(today()); }}>Pagar</Button>}
+                  {inv.pending > 0 && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setPay({ cardId: card.id, month: inv.month, amount: inv.pending });
+                        setPayAccount(s.accounts[0]?.id ?? "");
+                        setPayDate(today());
+                      }}
+                    >
+                      Pagar
+                    </Button>
+                  )}
                 </div>
                 <ul className="divide-y divide-border border-t border-border">
                   {inv.txs.map((t) => (
                     <li key={t.id} className="flex items-center gap-3 px-5 py-3 text-sm">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{t.description}{t.installment && <span className="text-muted-foreground"> ({t.installment})</span>}</p>
-                        <p className="text-xs text-muted-foreground">{t.category} · {fmtDate(t.date)} · {t.status}</p>
+                        <p className="truncate font-medium">
+                          {t.description}
+                          {t.installment && (
+                            <span className="text-muted-foreground"> ({t.installment})</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {t.category} · {fmtDate(t.date)} · {t.status}
+                        </p>
                       </div>
                       <Money value={t.amount} type="despesa" />
                     </li>
@@ -181,13 +311,48 @@ function Page() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{edit ? "Editar cartão" : "Novo cartão"}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{edit ? "Editar cartão" : "Novo cartão"}</DialogTitle>
+          </DialogHeader>
           <form onSubmit={save} className="grid gap-4">
-            <div className="grid gap-1.5"><Label>Nome</Label><Input value={form.name} maxLength={40} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Nubank" /></div>
-            <div className="grid gap-1.5"><Label>Limite total (R$)</Label><Input inputMode="decimal" value={form.limit} onChange={(e) => setForm({ ...form, limit: e.target.value })} /></div>
+            <div className="grid gap-1.5">
+              <Label>Nome</Label>
+              <Input
+                value={form.name}
+                maxLength={40}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Ex.: Nubank"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Limite total (R$)</Label>
+              <Input
+                inputMode="decimal"
+                value={form.limit}
+                onChange={(e) => setForm({ ...form, limit: e.target.value })}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5"><Label>Dia de fechamento</Label><Input type="number" min={1} max={31} value={form.closingDay} onChange={(e) => setForm({ ...form, closingDay: e.target.value })} /></div>
-              <div className="grid gap-1.5"><Label>Dia de vencimento</Label><Input type="number" min={1} max={31} value={form.dueDay} onChange={(e) => setForm({ ...form, dueDay: e.target.value })} /></div>
+              <div className="grid gap-1.5">
+                <Label>Dia de fechamento</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={form.closingDay}
+                  onChange={(e) => setForm({ ...form, closingDay: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Dia de vencimento</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={form.dueDay}
+                  onChange={(e) => setForm({ ...form, dueDay: e.target.value })}
+                />
+              </div>
             </div>
             <Button type="submit">Salvar</Button>
           </form>
@@ -196,14 +361,36 @@ function Page() {
 
       <Dialog open={!!pay} onOpenChange={(o) => !o && setPay(undefined)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Pagar fatura</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Pagar fatura</DialogTitle>
+          </DialogHeader>
           <form onSubmit={confirmPay} className="grid gap-4">
-            <p className="text-sm text-muted-foreground">Valor pendente: {brl(pay?.amount ?? 0)}. A saída entra como transferência, não como nova despesa.</p>
-            <div className="grid gap-1.5"><Label>Conta</Label>
-              <Select value={payAccount} onValueChange={setPayAccount}><SelectTrigger><SelectValue placeholder={s.accounts.length ? "Escolha" : "Cadastre uma conta"} /></SelectTrigger>
-                <SelectContent>{s.accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} · {brl(accountBalance(s, a.id))}</SelectItem>)}</SelectContent></Select></div>
-            <div className="grid gap-1.5"><Label>Data do pagamento</Label><Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></div>
-            <Button type="submit" disabled={!s.accounts.length}>Confirmar pagamento</Button>
+            <p className="text-sm text-muted-foreground">
+              Valor pendente: {brl(pay?.amount ?? 0)}. A saída entra como transferência, não como
+              nova despesa.
+            </p>
+            <div className="grid gap-1.5">
+              <Label>Conta</Label>
+              <Select value={payAccount} onValueChange={setPayAccount}>
+                <SelectTrigger>
+                  <SelectValue placeholder={s.accounts.length ? "Escolha" : "Cadastre uma conta"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {s.accounts.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} · {brl(accountBalance(s, a.id))}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Data do pagamento</Label>
+              <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+            </div>
+            <Button type="submit" disabled={!s.accounts.length}>
+              Confirmar pagamento
+            </Button>
           </form>
         </DialogContent>
       </Dialog>

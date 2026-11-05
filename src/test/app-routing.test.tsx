@@ -17,7 +17,15 @@ describe("App routing", () => {
 
   it("registers every personal finance section", () => {
     const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
-    for (const path of ["/contas", "/movimentacoes", "/cartoes", "/planejamento", "/investimentos", "/relatorios", "/calendario"]) {
+    for (const path of [
+      "/contas",
+      "/movimentacoes",
+      "/cartoes",
+      "/planejamento",
+      "/investimentos",
+      "/relatorios",
+      "/calendario",
+    ]) {
       expect(router.matchRoutes(path).at(-1)?.routeId).not.toBe(rootRouteId);
     }
   });

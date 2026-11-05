@@ -1,14 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { accountBalance, applyInvoicePayment, calendarEvents, investmentValue, invoiceMonth, monthTotals, spendingAlerts, type FinanceState, type Investment } from "./finance";
+import {
+  accountBalance,
+  applyInvoicePayment,
+  calendarEvents,
+  investmentValue,
+  invoiceMonth,
+  monthTotals,
+  spendingAlerts,
+  type FinanceState,
+  type Investment,
+} from "./finance";
 
 const base: FinanceState = {
-  accounts: [{ id: "a", name: "C", type: "corrente", initialBalance: 1000 }, { id: "b", name: "P", type: "poupanca", initialBalance: 0 }],
+  accounts: [
+    { id: "a", name: "C", type: "corrente", initialBalance: 1000 },
+    { id: "b", name: "P", type: "poupanca", initialBalance: 0 },
+  ],
   transactions: [
-    { id: "1", description: "s", amount: 500, type: "receita", category: "Salário", accountId: "a", date: "2026-10-05", paymentMethod: "Pix", status: "recebido" },
-    { id: "2", description: "d", amount: 200, type: "despesa", category: "Lazer", accountId: "a", date: "2026-10-06", paymentMethod: "Pix", status: "pendente" },
+    {
+      id: "1",
+      description: "s",
+      amount: 500,
+      type: "receita",
+      category: "Salário",
+      accountId: "a",
+      date: "2026-10-05",
+      paymentMethod: "Pix",
+      status: "recebido",
+    },
+    {
+      id: "2",
+      description: "d",
+      amount: 200,
+      type: "despesa",
+      category: "Lazer",
+      accountId: "a",
+      date: "2026-10-06",
+      paymentMethod: "Pix",
+      status: "pendente",
+    },
   ],
   transfers: [{ id: "t", fromId: "a", toId: "b", amount: 300, date: "2026-10-07" }],
-  cards: [], goals: [], investments: [], monthlyBudget: 0, categoryLimits: {},
+  cards: [],
+  goals: [],
+  investments: [],
+  monthlyBudget: 0,
+  categoryLimits: {},
 };
 
 describe("finance rules", () => {
@@ -18,8 +55,12 @@ describe("finance rules", () => {
     expect(monthTotals(base, "2026-10")).toEqual({ income: 500, expense: 200, net: 300 });
   });
   it("card purchase after closing day goes to next invoice", () => {
-    expect(invoiceMonth({ id: "c", name: "x", limit: 1, closingDay: 10, dueDay: 20 }, "2026-10-11")).toBe("2026-11");
-    expect(invoiceMonth({ id: "c", name: "x", limit: 1, closingDay: 10, dueDay: 20 }, "2026-10-10")).toBe("2026-10");
+    expect(
+      invoiceMonth({ id: "c", name: "x", limit: 1, closingDay: 10, dueDay: 20 }, "2026-10-11"),
+    ).toBe("2026-11");
+    expect(
+      invoiceMonth({ id: "c", name: "x", limit: 1, closingDay: 10, dueDay: 20 }, "2026-10-10"),
+    ).toBe("2026-10");
   });
   it("paying an invoice clears the card debt without creating another expense", () => {
     const card = { id: "c", name: "Visa", limit: 1000, closingDay: 10, dueDay: 20 };
@@ -28,7 +69,18 @@ describe("finance rules", () => {
       cards: [card],
       transactions: [
         ...base.transactions,
-        { id: "card", description: "compra", amount: 80, type: "despesa", category: "Compras", accountId: "", cardId: "c", date: "2026-10-05", paymentMethod: "Cartão de crédito", status: "pendente" },
+        {
+          id: "card",
+          description: "compra",
+          amount: 80,
+          type: "despesa",
+          category: "Compras",
+          accountId: "",
+          cardId: "c",
+          date: "2026-10-05",
+          paymentMethod: "Cartão de crédito",
+          status: "pendente",
+        },
       ],
     };
     const next = applyInvoicePayment(state, "c", "2026-10", "a", "2026-10-20");
@@ -38,7 +90,16 @@ describe("finance rules", () => {
     expect(accountBalance(next, "a")).toBe(accountBalance(state, "a") - 80);
   });
   it("keeps later contributions on top of the last valuation", () => {
-    const inv: Investment = { id: "i", name: "CDB", kind: "fixa", contributions: [{ date: "2026-01-01", amount: 100 }, { date: "2026-03-01", amount: 50 }], history: [{ date: "2026-02-01", value: 110 }] };
+    const inv: Investment = {
+      id: "i",
+      name: "CDB",
+      kind: "fixa",
+      contributions: [
+        { date: "2026-01-01", amount: 100 },
+        { date: "2026-03-01", amount: 50 },
+      ],
+      history: [{ date: "2026-02-01", value: 110 }],
+    };
     expect(investmentValue(inv)).toBe(160);
   });
   it("warns when a category reaches 80% of its limit and projects recurring items", () => {
@@ -46,11 +107,50 @@ describe("finance rules", () => {
     expect(spendingAlerts(state, "2026-10").map((a) => a.name)).toContain("Lazer");
     const withRecurring: FinanceState = {
       ...base,
-      transactions: [...base.transactions, { id: "r", description: "Aluguel", amount: 900, type: "despesa", category: "Moradia", accountId: "a", date: "2026-09-05", paymentMethod: "Pix", status: "pago", recurring: true }],
+      transactions: [
+        ...base.transactions,
+        {
+          id: "r",
+          description: "Aluguel",
+          amount: 900,
+          type: "despesa",
+          category: "Moradia",
+          accountId: "a",
+          date: "2026-09-05",
+          paymentMethod: "Pix",
+          status: "pago",
+          recurring: true,
+        },
+      ],
       cards: [{ id: "c", name: "Visa", limit: 1, closingDay: 1, dueDay: 12 }],
     };
     const october = calendarEvents(withRecurring, "2026-10");
-    expect(october.some((e) => e.kind === "recorrente" && e.title === "Aluguel" && e.date === "2026-10-05")).toBe(true);
+    expect(
+      october.some(
+        (e) => e.kind === "recorrente" && e.title === "Aluguel" && e.date === "2026-10-05",
+      ),
+    ).toBe(true);
     expect(october.some((e) => e.kind === "cartao" && e.date === "2026-10-12")).toBe(true);
+  });
+  it("adds money in cents", () => {
+    const state: FinanceState = {
+      ...base,
+      accounts: [{ id: "a", name: "C", type: "corrente", initialBalance: 0.1 }],
+      transactions: [
+        {
+          id: "1",
+          description: "s",
+          amount: 0.2,
+          type: "receita",
+          category: "Salário",
+          accountId: "a",
+          date: "2026-10-05",
+          paymentMethod: "Pix",
+          status: "recebido",
+        },
+      ],
+      transfers: [],
+    };
+    expect(accountBalance(state, "a")).toBe(0.3);
   });
 });
