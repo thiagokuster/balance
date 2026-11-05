@@ -269,7 +269,9 @@ function Page() {
                       ? "Aberta"
                       : inv.status === "fechada"
                         ? "Fechada"
-                        : "Paga"}
+                        : inv.status === "futura"
+                          ? "Futura"
+                          : "Paga"}
                   </Badge>
                   <Money value={inv.total} type="despesa" className="font-semibold" />
                   {inv.pending > 0 && (

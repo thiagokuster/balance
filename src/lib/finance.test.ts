@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   accountBalance,
+  addMonths,
+  applyContribution,
   applyInvoicePayment,
   calendarEvents,
+  cardInvoices,
   investmentValue,
   invoiceMonth,
   monthTotals,
+  netWorth,
   spendingAlerts,
+  today,
   type FinanceState,
   type Investment,
 } from "./finance";
@@ -152,5 +157,53 @@ describe("finance rules", () => {
       transfers: [],
     };
     expect(accountBalance(state, "a")).toBe(0.3);
+  });
+  it("debits the source account when a contribution names one", () => {
+    const state: FinanceState = {
+      ...base,
+      investments: [{ id: "i", name: "CDB", kind: "fixa", contributions: [], history: [] }],
+    };
+    const funded = applyContribution(state, "i", 500, "2026-11-05", "a");
+    expect(accountBalance(funded, "a")).toBe(accountBalance(state, "a") - 500);
+    expect(investmentValue(funded.investments[0]!)).toBe(500);
+    expect(netWorth(funded)).toBe(netWorth(state));
+    const outside = applyContribution(state, "i", 500, "2026-11-05");
+    expect(accountBalance(outside, "a")).toBe(accountBalance(state, "a"));
+    expect(netWorth(outside)).toBe(netWorth(state) + 500);
+  });
+  it("labels invoices that have not closed yet as future", () => {
+    const card = { id: "c", name: "Visa", limit: 1000, closingDay: 28, dueDay: 8 };
+    const open = invoiceMonth(card, today());
+    const future = addMonths(open, 2);
+    const past = addMonths(open, -2);
+    const purchase = (id: string, month: string, status: "pendente" | "pago") => ({
+      id,
+      description: id,
+      amount: 40,
+      type: "despesa" as const,
+      category: "Compras",
+      accountId: "",
+      cardId: "c",
+      date: `${month}-01`,
+      paymentMethod: "Cartão de crédito",
+      status,
+    });
+    const state: FinanceState = {
+      ...base,
+      cards: [card],
+      transactions: [
+        purchase("past", past, "pendente"),
+        purchase("open", open, "pendente"),
+        purchase("future", future, "pendente"),
+        purchase("paid", addMonths(open, -3), "pago"),
+      ],
+    };
+    const byMonth = new Map(
+      cardInvoices(state, card).map((invoice) => [invoice.month, invoice.status]),
+    );
+    expect(byMonth.get(past)).toBe("fechada");
+    expect(byMonth.get(open)).toBe("aberta");
+    expect(byMonth.get(future)).toBe("futura");
+    expect(byMonth.get(addMonths(open, -3))).toBe("paga");
   });
 });

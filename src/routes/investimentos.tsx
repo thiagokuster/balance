@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState, Money, PageHeader } from "@/components/app-shell";
 import { parseMoney } from "@/lib/money";
 import {
+  applyContribution,
   brl,
   fmtDate,
   investedTotal,
@@ -56,7 +57,9 @@ function Page() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<Investment["kind"]>("fixa");
-  const [aporte, setAporte] = useState<{ id: string; amount: string; date: string } | undefined>();
+  const [aporte, setAporte] = useState<
+    { id: string; amount: string; date: string; accountId: string } | undefined
+  >();
   const [valor, setValor] = useState<{ id: string; amount: string; date: string } | undefined>();
 
   function add(e: React.FormEvent) {
@@ -85,16 +88,16 @@ function Page() {
       toast.error("Informe o valor do aporte.");
       return;
     }
-    update((st) => ({
-      ...st,
-      investments: st.investments.map((i) =>
-        i.id === aporte.id
-          ? { ...i, contributions: [...i.contributions, { date: aporte.date, amount }] }
-          : i,
-      ),
-    }));
+    update((st) =>
+      applyContribution(st, aporte.id, amount, aporte.date, aporte.accountId || undefined),
+    );
+    const fromAccount = Boolean(aporte.accountId);
     setAporte(undefined);
-    toast.success("Aporte registrado");
+    toast.success(
+      fromAccount
+        ? "Aporte registrado. O valor saiu da conta."
+        : "Aporte registrado. Nenhuma conta foi debitada, então o patrimônio subiu.",
+    );
   }
   function addValor(e: React.FormEvent) {
     e.preventDefault();
@@ -122,10 +125,18 @@ function Page() {
     toast.success("Valor atualizado");
   }
   function remove(id: string) {
-    if (!confirm("Excluir este investimento e o histórico dele? Dá para desfazer em seguida."))
+    if (
+      !confirm(
+        "Excluir este investimento apaga os aportes e devolve o dinheiro debitado nas contas. Dá para desfazer em seguida.",
+      )
+    )
       return;
     const snapshot = s;
-    update((st) => ({ ...st, investments: st.investments.filter((i) => i.id !== id) }));
+    update((st) => ({
+      ...st,
+      investments: st.investments.filter((i) => i.id !== id),
+      transfers: st.transfers.filter((t) => t.toId !== `investment:${id}`),
+    }));
     toast("Investimento excluído", {
       duration: 8000,
       action: { label: "Desfazer", onClick: () => replaceAll(snapshot) },
@@ -180,7 +191,14 @@ function Page() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setAporte({ id: inv.id, amount: "", date: today() })}
+                      onClick={() =>
+                        setAporte({
+                          id: inv.id,
+                          amount: "",
+                          date: today(),
+                          accountId: s.accounts[0]?.id ?? "",
+                        })
+                      }
                     >
                       Aporte
                     </Button>
@@ -307,6 +325,32 @@ function Page() {
                 onChange={(e) => aporte && setAporte({ ...aporte, date: e.target.value })}
               />
             </div>
+            <div className="grid gap-1.5">
+              <Label>Sai da conta</Label>
+              <Select
+                value={aporte?.accountId || "none"}
+                onValueChange={(value) =>
+                  aporte && setAporte({ ...aporte, accountId: value === "none" ? "" : value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Não debitar nenhuma conta</SelectItem>
+                  {s.accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {aporte?.accountId
+                ? "O valor sai desta conta. O patrimônio total não muda."
+                : "Sem conta de origem, o valor entra no investimento e não sai de nenhuma conta. O patrimônio sobe."}
+            </p>
             <Button type="submit">Registrar aporte</Button>
           </form>
         </DialogContent>

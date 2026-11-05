@@ -151,7 +151,9 @@ function Page() {
   const name = (id: string) =>
     id.startsWith("card:")
       ? `Fatura ${s.cards.find((c) => `card:${c.id}` === id)?.name ?? ""}`
-      : (s.accounts.find((x) => x.id === id)?.name ?? "—");
+      : id.startsWith("investment:")
+        ? `Aporte ${s.investments.find((i) => `investment:${i.id}` === id)?.name ?? ""}`
+        : (s.accounts.find((x) => x.id === id)?.name ?? "—");
 
   return (
     <>
@@ -303,7 +305,7 @@ function Page() {
 
       {s.transfers.length > 0 && (
         <div className="panel mt-6 overflow-hidden">
-          <h3 className="p-5 font-semibold">Transferências e pagamentos de fatura</h3>
+          <h3 className="p-5 font-semibold">Transferências, aportes e faturas</h3>
           <ul className="divide-y divide-border">
             {[...s.transfers]
               .sort((x, y) => y.date.localeCompare(x.date))
@@ -315,7 +317,7 @@ function Page() {
                   </span>
                   <span className="text-muted-foreground">{fmtDate(t.date)}</span>
                   <Money value={t.amount} className="font-semibold" />
-                  {!t.toId.startsWith("card:") && (
+                  {!t.toId.startsWith("card:") && !t.toId.startsWith("investment:") && (
                     <Button
                       size="icon"
                       variant="ghost"

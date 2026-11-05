@@ -596,7 +596,7 @@ export interface CardInvoice {
   txs: Transaction[];
   total: number;
   pending: number;
-  status: "aberta" | "fechada" | "paga";
+  status: "aberta" | "fechada" | "futura" | "paga";
 }
 
 export function cardInvoices(s: FinanceState, card: Card): CardInvoice[] {
@@ -617,9 +617,52 @@ export function cardInvoices(s: FinanceState, card: Card): CardInvoice[] {
       const pending = reais(
         sorted.filter((t) => t.status === "pendente").reduce((a, t) => a + cents(t.amount), 0),
       );
-      const status = month === open ? "aberta" : pending > 0 ? "fechada" : "paga";
+      const status =
+        month === open
+          ? "aberta"
+          : month > open
+            ? pending > 0
+              ? "futura"
+              : "paga"
+            : pending > 0
+              ? "fechada"
+              : "paga";
       return { month, txs: sorted, total, pending, status };
     });
+}
+
+/** Moves money from an account into an investment. Without an account, net worth rises. */
+export function applyContribution(
+  s: FinanceState,
+  investmentId: string,
+  amount: number,
+  date: string,
+  accountId?: string,
+): FinanceState {
+  const investment = s.investments.find((item) => item.id === investmentId);
+  if (!investment || !(amount > 0)) return s;
+  const account = accountId ? s.accounts.find((item) => item.id === accountId) : undefined;
+  return {
+    ...s,
+    investments: s.investments.map((item) =>
+      item.id === investmentId
+        ? { ...item, contributions: [...item.contributions, { date, amount }] }
+        : item,
+    ),
+    transfers: account
+      ? [
+          ...s.transfers,
+          {
+            id: uid(),
+            fromId: account.id,
+            toId: `investment:${investmentId}`,
+            amount,
+            date,
+            note: `Aporte ${investment.name}`.slice(0, 100),
+          },
+        ]
+      : s.transfers,
+  };
 }
 
 /** Paying a bill is a transfer: it lowers the account and does not count again as an expense. */
