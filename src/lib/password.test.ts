@@ -36,9 +36,20 @@ describe("password policy", () => {
       "JoaoSilva12345",
       "brasilbrasil",
       "senha2024",
+      "P@ssw0rd2024!!",
+      "Senha@2024!",
+      "flamengosenh4",
+      "Flamengo2024Campeao",
+      "SENHA_SEGURA_2024",
+      "Família Brasileiro Saudade",
     ]) {
       expect(passwordIssue(weak), weak).not.toBeNull();
     }
+    expect(passwordIssue("P@ssw0rd2024!!")).toMatch(/comum/);
+    expect(passwordIssue("flamengosenh4")).toMatch(/comum/);
+    expect(passwordIssue("Flamengo2024Campeao")).toMatch(/comum/);
+    expect(passwordIssue("SENHA_SEGURA_2024")).toMatch(/comum/);
+    expect(passwordIssue("Família Brasileiro Saudade")).toMatch(/comum/);
     expect(passwordIssue("90817263540981")).toMatch(/números/);
     expect(passwordIssue("9081726354098172")).toBeNull();
   });

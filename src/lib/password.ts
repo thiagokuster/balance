@@ -83,22 +83,30 @@ function plainLetters(value: string) {
   return fold(value).replace(/[^a-z]/g, "");
 }
 
-/** Trailing digits are removed before lookalike letters, so a year does not hide the word. */
-function leetLetters(value: string) {
-  const withoutYear = fold(value).replace(/\d+$/, "");
-  const mapped = withoutYear
+function applyLeet(value: string) {
+  return value
     .replaceAll("0", "o")
     .replaceAll("3", "e")
     .replaceAll("4", "a")
     .replaceAll("5", "s")
     .replaceAll("7", "t")
     .replaceAll("@", "a")
-    .replaceAll("$", "s");
-  return mapped.replace(/[^a-z1]/g, "");
+    .replaceAll("$", "s")
+    .replace(/[^a-z1]/g, "");
+}
+
+/**
+ * Two readings: one drops a trailing year or symbols before lookalike letters
+ * (so 2024!! cannot become letters and hide the word), and one keeps that
+ * tail so a final digit can still be a letter, as in senh4.
+ */
+function leetReadings(value: string) {
+  const folded = fold(value);
+  return [applyLeet(folded.replace(/[^a-z]+$/, "")), applyLeet(folded)];
 }
 
 function usesCommonWords(password: string) {
-  return canSegment(plainLetters(password)) || canSegment(leetLetters(password));
+  return canSegment(plainLetters(password)) || leetReadings(password).some(canSegment);
 }
 
 /** Returns a reason to refuse a new password, or null when it can be used. */
