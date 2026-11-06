@@ -2,6 +2,10 @@ import { changedAt, storageSnapshot } from "./finance";
 import { readBackup } from "./export";
 import { isEncryptedVault } from "./vault";
 
+export const SYNC_PASSWORD_MESSAGE = "Crie uma senha antes de vincular um arquivo";
+export const SYNC_CONFLICT_MESSAGE =
+  "O arquivo vinculado mudou em outro aparelho e não foi atualizado. Não há como juntar as duas versões.";
+
 /** A linked file is useful only when it was written after the last local change. */
 export function syncIsNewer(fileAt: string, localAt: string) {
   if (!fileAt) return false;
@@ -9,6 +13,7 @@ export function syncIsNewer(fileAt: string, localAt: string) {
   return fileAt > localAt;
 }
 
+/** A plain finance snapshot must not become a file. Only the sealed vault does. */
 export function envelopeFromStorage(raw: string, exportedAt = new Date().toISOString()) {
   let json: unknown;
   try {
@@ -16,10 +21,38 @@ export function envelopeFromStorage(raw: string, exportedAt = new Date().toISOSt
   } catch {
     return null;
   }
-  if (isEncryptedVault(json)) {
-    return JSON.stringify({ app: "saldo", version: 2, exportedAt, sealed: json });
+  if (!isEncryptedVault(json)) return null;
+  return JSON.stringify({ app: "saldo", version: 2, exportedAt, sealed: json });
+}
+
+/**
+ * Skip when this browser has no sealed vault. Conflict when the file's
+ * exportedAt is not the revision this browser last read or wrote.
+ */
+export function decideLinkedWrite(
+  raw: string,
+  fileText: string,
+  seenAt: string,
+  exportedAt: string,
+): "skip" | "conflict" | { body: string } {
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    return "skip";
   }
-  return JSON.stringify({ app: "saldo", version: 2, exportedAt, state: json });
+  if (!isEncryptedVault(json)) return "skip";
+  const fileAt = revisionOf(fileText);
+  if (fileAt === null || fileAt !== seenAt) return "conflict";
+  const body = envelopeFromStorage(raw, exportedAt);
+  return body ? { body } : "skip";
+}
+
+function revisionOf(fileText: string) {
+  if (!fileText.trim()) return "";
+  const parsed = readBackup(fileText);
+  if (!parsed) return null;
+  return parsed.exportedAt ?? "";
 }
 
 type SyncHandle = {
@@ -39,6 +72,23 @@ type PickerWindow = Window & {
 const DB = "saldo-sync";
 const STORE = "handles";
 const HANDLE_KEY = "file";
+const SEEN_KEY = "saldo-sync-visto";
+
+function seenRevision() {
+  if (typeof localStorage === "undefined") return "";
+  return localStorage.getItem(SEEN_KEY) ?? "";
+}
+
+/** Remembers the exportedAt this browser last read or wrote. */
+export function noteLinkedRevision(exportedAt: string) {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(SEEN_KEY, exportedAt);
+}
+
+function reportSyncConflict() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("saldo-sync-conflict"));
+}
 
 function openDb() {
   return new Promise<IDBDatabase>((resolve, reject) => {
@@ -87,15 +137,39 @@ async function permitted(handle: SyncHandle, ask: boolean) {
 async function writeHandle(handle: SyncHandle) {
   const raw = storageSnapshot();
   if (!raw) return;
-  const body = envelopeFromStorage(raw);
-  if (!body) return;
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (!isEncryptedVault(json)) return;
+  let fileText: string;
+  try {
+    fileText = await (await handle.getFile()).text();
+  } catch {
+    throw new Error("sync-conflict");
+  }
+  const exportedAt = new Date().toISOString();
+  const decision = decideLinkedWrite(raw, fileText, seenRevision(), exportedAt);
+  if (decision === "skip") return;
+  if (decision === "conflict") throw new Error("sync-conflict");
   const writable = await handle.createWritable();
-  await writable.write(body);
+  await writable.write(decision.body);
   await writable.close();
+  noteLinkedRevision(exportedAt);
 }
 
 /** Remembers a JSON file, usually inside a Drive, OneDrive or Dropbox folder. */
 export async function linkSyncFile() {
+  const raw = storageSnapshot();
+  let json: unknown = null;
+  try {
+    json = raw ? JSON.parse(raw) : null;
+  } catch {
+    json = null;
+  }
+  if (!isEncryptedVault(json)) throw new Error(SYNC_PASSWORD_MESSAGE);
   const picker = window as PickerWindow;
   if (!picker.showSaveFilePicker) throw new Error("sync-unsupported");
   const handle = await picker.showSaveFilePicker({
@@ -113,7 +187,8 @@ export async function pushLinkedSync() {
     const handle = await getHandle();
     if (!handle || !(await permitted(handle, false))) return;
     await writeHandle(handle);
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "sync-conflict") reportSyncConflict();
     /* the copy in this browser was already saved */
   }
 }

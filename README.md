@@ -45,7 +45,7 @@ bun run test
 bun run test:e2e
 ```
 
-O teste de ponta a ponta abre o aplicativo, cria a senha, lança uma despesa, baixa o backup e restaura esse arquivo.
+O teste de ponta a ponta abre o aplicativo, cria a senha, lança uma despesa, baixa o backup e restaura esse arquivo. Outro teste recusa o vínculo sem senha e, com senha, só grava o arquivo criptografado, sem substituir uma versão alterada em outro aparelho.
 
 ## 🔐 Dados e senha
 
@@ -57,7 +57,7 @@ A espera depois de errar a senha fica registrada neste navegador e continua depo
 
 Limpar os dados do site ou abrir o Saldo em outro computador apaga o que estava só no navegador. Em Relatórios, **Backup** baixa um JSON criptografado e **Restaurar** pede a senha para trazer os dados de volta. O arquivo é criptografado mesmo quando o aplicativo está sem senha; nesse caso a senha vale só para o backup. Arquivos maiores que 8 MB são recusados. CSV e PDF saem sem criptografia e ficam legíveis na pasta de Downloads. Se a senha do aplicativo já estiver ativa, o backup usa essa mesma senha.
 
-Para ter os mesmos dados em outro aparelho, guarde esse arquivo numa pasta do Drive, OneDrive ou Dropbox e restaure nele. No Chrome e no Edge, **Vincular arquivo** grava o backup nesse arquivo a cada mudança. Um arquivo mais antigo pede confirmação antes de substituir o que está neste navegador. Não há conta na nuvem do Saldo: os lançamentos não são enviados a um servidor.
+Para ter os mesmos dados em outro aparelho, guarde o backup criptografado numa pasta do Drive, OneDrive ou Dropbox e restaure nele. No Chrome e no Edge, **Vincular arquivo** atualiza esse arquivo a cada mudança, mas só com a senha do aplicativo: sem senha o vínculo é recusado e o arquivo não recebe lançamentos em texto puro. Cada navegador lembra a versão que leu ou gravou. Se o arquivo mudou em outro aparelho, este não grava por cima e avisa. A comparação usa o relógio de cada aparelho; um relógio errado pode enganar essa checagem. Não há fusão: duas edições feitas sem estar em dia deixam só uma das versões. Um arquivo mais antigo pede confirmação antes de substituir o que está neste navegador. Não há conta na nuvem do Saldo: os lançamentos não são enviados a um servidor.
 
 Um aporte pode sair de uma conta, e o resgate devolve esse valor para uma conta. Aportes antigos, gravados sem conta de origem, não foram alterados: o dinheiro continua só no investimento e o patrimônio fica maior do que o saldo das contas.
 

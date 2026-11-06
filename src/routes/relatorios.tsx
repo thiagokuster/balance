@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -43,7 +43,10 @@ import {
   canLinkSyncFile,
   linkSyncFile,
   linkedFileIsNewer,
+  noteLinkedRevision,
   readLinkedSync,
+  SYNC_CONFLICT_MESSAGE,
+  SYNC_PASSWORD_MESSAGE,
 } from "@/lib/device-sync";
 
 export const Route = createFileRoute("/relatorios")({
@@ -74,6 +77,7 @@ function Page() {
   const [askExportPassword, setAskExportPassword] = useState(false);
   const [sealed, setSealed] = useState<VaultPayload | null>(null);
   const [newerSync, setNewerSync] = useState(false);
+  const linkedRevision = useRef<string | null>(null);
   useEffect(() => {
     void linkedFileIsNewer().then(setNewerSync);
   }, []);
@@ -150,7 +154,7 @@ function Page() {
     }
   }
 
-  function restore(file: File) {
+  function restore(file: File, fromLink = false) {
     if (file.size > MAX_BACKUP_BYTES) {
       toast.error("Esse arquivo é grande demais para restaurar.");
       return;
@@ -173,11 +177,13 @@ function Page() {
       )
         return;
       if (parsed.kind === "sealed") {
+        linkedRevision.current = fromLink ? (parsed.exportedAt ?? "") : null;
         setRestorePassword("");
         setSealed(parsed.payload);
         return;
       }
       if (!window.confirm("Isso substitui contas, lançamentos e metas deste navegador.")) return;
+      if (fromLink) noteLinkedRevision(parsed.exportedAt ?? "");
       replaceAll(parsed.state);
       toast.success("Backup restaurado");
     };
@@ -189,6 +195,8 @@ function Page() {
     if (!sealed) return;
     try {
       const opened = await openState(sealed, restorePassword);
+      if (linkedRevision.current !== null) noteLinkedRevision(linkedRevision.current);
+      linkedRevision.current = null;
       replaceAll(opened.state);
       setSealed(null);
       setRestorePassword("");
@@ -205,6 +213,14 @@ function Page() {
       toast.success("Arquivo vinculado. Ele acompanha as mudanças deste navegador.");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof Error && error.message === SYNC_PASSWORD_MESSAGE) {
+        toast.error(SYNC_PASSWORD_MESSAGE);
+        return;
+      }
+      if (error instanceof Error && error.message === "sync-conflict") {
+        toast.error(SYNC_CONFLICT_MESSAGE);
+        return;
+      }
       toast.error("Não foi possível vincular o arquivo. Use Backup e Restaurar.");
     }
   }
@@ -215,7 +231,7 @@ function Page() {
       toast.error("Não há arquivo vinculado, ou o navegador não deu permissão.");
       return;
     }
-    restore(new File([text], "saldo-sync.json", { type: "application/json" }));
+    restore(new File([text], "saldo-sync.json", { type: "application/json" }), true);
   }
 
   return (
@@ -254,9 +270,10 @@ function Page() {
       <div id="sincronizar" className="panel mb-4 p-5">
         <h2 className="font-semibold">Outro dispositivo</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          O Saldo não envia lançamentos para um servidor. Salve o backup criptografado numa pasta do
-          Drive, OneDrive ou Dropbox e restaure o mesmo arquivo no outro aparelho. Se este navegador
-          permitir, vincule o arquivo para ele ser atualizado a cada mudança.
+          O Saldo não envia lançamentos para um servidor. O backup criptografado pode ficar numa
+          pasta do Drive, OneDrive ou Dropbox e ser restaurado no outro aparelho. Vincular esse
+          arquivo, para ele acompanhar as mudanças, exige a senha do aplicativo. Se ele mudar em
+          outro aparelho, este navegador não grava por cima.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {canLinkSyncFile() && (
@@ -306,7 +323,14 @@ function Page() {
           </form>
         </DialogContent>
       </Dialog>
-      <Dialog open={sealed !== null} onOpenChange={(open) => !open && setSealed(null)}>
+      <Dialog
+        open={sealed !== null}
+        onOpenChange={(open) => {
+          if (open) return;
+          linkedRevision.current = null;
+          setSealed(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Abrir backup</DialogTitle>

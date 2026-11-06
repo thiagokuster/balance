@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { lockSession, useBackupReminder, useNeedsOnboarding, useVaultStatus } from "@/lib/finance";
+import { SYNC_CONFLICT_MESSAGE } from "@/lib/device-sync";
 import { LockScreen, PrivacyButton } from "@/components/privacy-lock";
 import { Onboarding } from "@/components/onboarding";
 
@@ -91,8 +92,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       toast.error(
         "Não foi possível salvar neste navegador. O armazenamento pode estar cheio ou bloqueado.",
       );
+    const onSyncConflict = () => toast.error(SYNC_CONFLICT_MESSAGE);
     window.addEventListener("saldo-persist-error", onPersistError);
-    return () => window.removeEventListener("saldo-persist-error", onPersistError);
+    window.addEventListener("saldo-sync-conflict", onSyncConflict);
+    return () => {
+      window.removeEventListener("saldo-persist-error", onPersistError);
+      window.removeEventListener("saldo-sync-conflict", onSyncConflict);
+    };
   }, []);
 
   const nav = (
