@@ -63,7 +63,7 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-export const CHART_COLORS = [
+const CHART_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
   "var(--chart-3)",
@@ -71,7 +71,7 @@ export const CHART_COLORS = [
   "var(--chart-5)",
   "var(--muted-foreground)",
 ];
-export const tooltipStyle = {
+const tooltipStyle = {
   contentStyle: {
     background: "var(--popover)",
     border: "1px solid var(--border)",
