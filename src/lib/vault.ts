@@ -59,6 +59,13 @@ export async function openState(
   payload: VaultPayload,
   password: string,
 ): Promise<{ state: FinanceState; session: VaultSession }> {
+  if (
+    !Number.isInteger(payload.iter) ||
+    payload.iter < MIN_ITERATIONS ||
+    payload.iter > MAX_ITERATIONS
+  ) {
+    throw new Error("vault-iterations");
+  }
   const key = await deriveKey(password, b64ToBytes(payload.salt), payload.iter);
   let plain: ArrayBuffer;
   try {

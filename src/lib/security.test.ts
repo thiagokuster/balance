@@ -14,6 +14,7 @@ import {
 import { parseFinanceState } from "./finance-schema";
 import { readBackup } from "./export";
 import { securityHeaders } from "./security-headers";
+import { renderErrorPage } from "./error-page";
 import { createSession, legacyPasswordMatches, openState, sealState } from "./vault";
 
 const blank = {
@@ -65,6 +66,12 @@ describe("dados gravados no navegador", () => {
     const opened = await openState(sealed, "senha-forte");
     expect(opened.state.accounts[0]?.name).toBe("Nubank");
     await expect(openState(sealed, "senha-errada")).rejects.toThrow("vault-auth");
+    await expect(openState({ ...sealed, iter: 999 }, "senha-forte")).rejects.toThrow(
+      "vault-iterations",
+    );
+    await expect(openState({ ...sealed, iter: 2_000_001 }, "senha-forte")).rejects.toThrow(
+      "vault-iterations",
+    );
   });
 
   it("não grava a descrição em texto puro depois da senha", async () => {
@@ -166,6 +173,14 @@ describe("dados gravados no navegador", () => {
 });
 
 describe("saída e cabeçalhos", () => {
+  it("mostra a página de erro em português", () => {
+    const html = renderErrorPage();
+    expect(html).toContain('lang="pt-BR"');
+    expect(html).toContain("Esta página não carregou");
+    expect(html).toContain("Tentar de novo");
+    expect(html).not.toContain("didn't load");
+  });
+
   it("impede fórmula de planilha no CSV", () => {
     expect(toCSV([["=1+1", "ok"]])).toBe(`"'=1+1";"ok"`);
   });

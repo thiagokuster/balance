@@ -1,14 +1,3 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
+# O aplicativo não tem página pública para busca. Liberar de novo se houver uma página de apresentação.
 User-agent: *
-Allow: /
+Disallow: /
