@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -21,6 +21,7 @@ import { PageHeader } from "@/components/app-shell";
 import {
   addMonths,
   brl,
+  changedAt,
   endOfMonth,
   expensesByCategory,
   lastMonths,
@@ -38,6 +39,12 @@ import { exportCsv, exportPdf, MAX_BACKUP_BYTES, readBackup } from "@/lib/export
 import { passwordIssue } from "@/lib/password";
 import { PasswordMeter } from "@/components/password-meter";
 import { openState, type VaultPayload } from "@/lib/vault";
+import {
+  canLinkSyncFile,
+  linkSyncFile,
+  linkedFileIsNewer,
+  readLinkedSync,
+} from "@/lib/device-sync";
 
 export const Route = createFileRoute("/relatorios")({
   head: () => ({
@@ -66,6 +73,10 @@ function Page() {
   const [exportAgain, setExportAgain] = useState("");
   const [askExportPassword, setAskExportPassword] = useState(false);
   const [sealed, setSealed] = useState<VaultPayload | null>(null);
+  const [newerSync, setNewerSync] = useState(false);
+  useEffect(() => {
+    void linkedFileIsNewer().then(setNewerSync);
+  }, []);
   const [restorePassword, setRestorePassword] = useState("");
 
   const range =
@@ -151,6 +162,16 @@ function Page() {
         toast.error("Esse arquivo não é um backup do Saldo.");
         return;
       }
+      const local = changedAt();
+      if (
+        parsed.exportedAt &&
+        local &&
+        parsed.exportedAt < local &&
+        !window.confirm(
+          "Este arquivo é mais antigo que os dados deste navegador. Restaurar substitui o que está aqui.",
+        )
+      )
+        return;
       if (parsed.kind === "sealed") {
         setRestorePassword("");
         setSealed(parsed.payload);
@@ -175,6 +196,26 @@ function Page() {
     } catch {
       toast.error("Senha incorreta.");
     }
+  }
+
+  async function linkFile() {
+    try {
+      await linkSyncFile();
+      setNewerSync(false);
+      toast.success("Arquivo vinculado. Ele acompanha as mudanças deste navegador.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      toast.error("Não foi possível vincular o arquivo. Use Backup e Restaurar.");
+    }
+  }
+
+  async function bringLinked() {
+    const text = await readLinkedSync();
+    if (!text) {
+      toast.error("Não há arquivo vinculado, ou o navegador não deu permissão.");
+      return;
+    }
+    restore(new File([text], "saldo-sync.json", { type: "application/json" }));
   }
 
   return (
@@ -210,6 +251,29 @@ function Page() {
           </label>
         </Button>
       </PageHeader>
+      <div id="sincronizar" className="panel mb-4 p-5">
+        <h2 className="font-semibold">Outro dispositivo</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          O Saldo não envia lançamentos para um servidor. Salve o backup criptografado numa pasta do
+          Drive, OneDrive ou Dropbox e restaure o mesmo arquivo no outro aparelho. Se este navegador
+          permitir, vincule o arquivo para ele ser atualizado a cada mudança.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {canLinkSyncFile() && (
+            <Button variant="outline" onClick={() => void linkFile()}>
+              Vincular arquivo
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => void bringLinked()}>
+            Trazer arquivo vinculado
+          </Button>
+        </div>
+        {newerSync && (
+          <p className="mt-3 text-sm">
+            O arquivo vinculado está mais novo que os dados deste navegador.
+          </p>
+        )}
+      </div>
       <Dialog open={askExportPassword} onOpenChange={setAskExportPassword}>
         <DialogContent>
           <DialogHeader>

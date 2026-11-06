@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { CreditCard, Plus, Trash2 } from "lucide-react";
+import { Archive, CreditCard, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -26,6 +26,7 @@ import {
   monthLabel,
   payInvoice,
   replaceAll,
+  selectableAccounts,
   today,
   uid,
   update,
@@ -102,6 +103,26 @@ function Page() {
     setOpen(false);
     toast.success(edit ? "Cartão atualizado" : "Cartão cadastrado");
   }
+  function archive(card: Card) {
+    if (
+      !confirm(
+        `Arquivar ${card.name} tira o cartão das compras novas. Faturas e relatórios continuam.`,
+      )
+    )
+      return;
+    update((st) => ({
+      ...st,
+      cards: st.cards.map((item) => (item.id === card.id ? { ...item, archived: true } : item)),
+    }));
+    toast.success("Cartão arquivado. O histórico continua nos relatórios.");
+  }
+  function unarchive(card: Card) {
+    update((st) => ({
+      ...st,
+      cards: st.cards.map((item) => (item.id === card.id ? { ...item, archived: false } : item)),
+    }));
+    toast.success("Cartão de volta à lista.");
+  }
   function remove(card: Card) {
     if (
       !confirm(`Excluir ${card.name} apaga as compras lançadas nele. Dá para desfazer em seguida.`)
@@ -115,7 +136,7 @@ function Page() {
       transfers: st.transfers.filter((t) => t.toId !== `card:${card.id}`),
     }));
     if (selected === card.id) setSelected(undefined);
-    toast("Cartão excluído", {
+    toast("Histórico do cartão apagado", {
       duration: 8000,
       action: { label: "Desfazer", onClick: () => replaceAll(snapshot) },
     });
@@ -164,40 +185,58 @@ function Page() {
         />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          {s.cards.map((c) => {
-            const available = cardAvailable(s, c);
-            const active = selected === c.id;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setSelected(active ? undefined : c.id)}
-                className={`panel panel-glow p-5 text-left transition ${active ? "ring-2 ring-primary" : "hover:bg-muted/40"}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium">{c.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Fecha dia {c.closingDay} · vence dia {c.dueDay}
-                    </p>
+          {s.cards
+            .filter((c) => !c.archived)
+            .map((c) => {
+              const available = cardAvailable(s, c);
+              const active = selected === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelected(active ? undefined : c.id)}
+                  className={`panel panel-glow p-5 text-left transition ${active ? "ring-2 ring-primary" : "hover:bg-muted/40"}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{c.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Fecha dia {c.closingDay} · vence dia {c.dueDay}
+                      </p>
+                    </div>
+                    <CreditCard className="h-5 w-5 text-primary" />
                   </div>
-                  <CreditCard className="h-5 w-5 text-primary" />
-                </div>
-                <p className="mt-4 font-display text-2xl font-semibold tabular-nums">
-                  {brl(available)}
-                </p>
-                <p className="text-xs text-muted-foreground">disponível de {brl(c.limit)}</p>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-primary"
-                    style={{
-                      width: `${Math.min(100, Math.max(0, ((c.limit - available) / c.limit) * 100))}%`,
-                    }}
-                  />
-                </div>
-              </button>
-            );
-          })}
+                  <p className="mt-4 font-display text-2xl font-semibold tabular-nums">
+                    {brl(available)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">disponível de {brl(c.limit)}</p>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full bg-primary"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, ((c.limit - available) / c.limit) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                </button>
+              );
+            })}
+        </div>
+      )}
+
+      {s.cards.some((item) => item.archived) && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {s.cards
+            .filter((item) => item.archived)
+            .map((item) => (
+              <Button
+                key={item.id}
+                variant={selected === item.id ? "default" : "outline"}
+                onClick={() => setSelected(selected === item.id ? undefined : item.id)}
+              >
+                {item.name} · arquivado
+              </Button>
+            ))}
         </div>
       )}
 
@@ -206,21 +245,42 @@ function Page() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-xl font-semibold">{card.name}</h2>
             <div className="flex gap-2">
-              <TransactionDialog
-                defaults={{ paymentMethod: "Cartão de crédito", cardId: card.id }}
-                trigger={
-                  <Button variant="outline">
-                    <Plus className="h-4 w-4" />
-                    Nova compra
+              {card.archived ? (
+                <>
+                  <Button variant="outline" onClick={() => unarchive(card)}>
+                    Desarquivar
                   </Button>
-                }
-              />
-              <Button variant="outline" onClick={() => openEdit(card)}>
-                Editar
-              </Button>
-              <Button variant="ghost" onClick={() => remove(card)} aria-label="Excluir cartão">
-                <Trash2 className="h-4 w-4 text-expense" />
-              </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => remove(card)}
+                    aria-label="Apagar histórico do cartão"
+                  >
+                    <Trash2 className="h-4 w-4 text-expense" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <TransactionDialog
+                    defaults={{ paymentMethod: "Cartão de crédito", cardId: card.id }}
+                    trigger={
+                      <Button variant="outline">
+                        <Plus className="h-4 w-4" />
+                        Nova compra
+                      </Button>
+                    }
+                  />
+                  <Button variant="outline" onClick={() => openEdit(card)}>
+                    Editar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => archive(card)}
+                    aria-label="Arquivar cartão"
+                  >
+                    <Archive className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
@@ -375,10 +435,12 @@ function Page() {
               <Label>Conta</Label>
               <Select value={payAccount} onValueChange={setPayAccount}>
                 <SelectTrigger>
-                  <SelectValue placeholder={s.accounts.length ? "Escolha" : "Cadastre uma conta"} />
+                  <SelectValue
+                    placeholder={selectableAccounts(s).length ? "Escolha" : "Cadastre uma conta"}
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {s.accounts.map((a) => (
+                  {selectableAccounts(s).map((a) => (
                     <SelectItem key={a.id} value={a.id}>
                       {a.name} · {brl(accountBalance(s, a.id))}
                     </SelectItem>
@@ -390,7 +452,7 @@ function Page() {
               <Label>Data do pagamento</Label>
               <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
             </div>
-            <Button type="submit" disabled={!s.accounts.length}>
+            <Button type="submit" disabled={!selectableAccounts(s).length}>
               Confirmar pagamento
             </Button>
           </form>

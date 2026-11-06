@@ -10,11 +10,15 @@ import {
   hasUnlinkedContributions,
   investmentValue,
   invoiceMonth,
+  categoriesFor,
+  exceedsCardLimit,
   monthTotals,
   netWorth,
+  selectableAccounts,
   spendingAlerts,
   today,
   transferPartyName,
+  withCustomCategory,
   type FinanceState,
   type Investment,
 } from "./finance";
@@ -242,5 +246,45 @@ describe("finance rules", () => {
     expect(byMonth.get(open)).toBe("aberta");
     expect(byMonth.get(future)).toBe("futura");
     expect(byMonth.get(addMonths(open, -3))).toBe("paga");
+  });
+  it("warns when a card purchase passes the available limit", () => {
+    const state: FinanceState = {
+      ...base,
+      cards: [{ id: "c", name: "Visa", limit: 100, closingDay: 1, dueDay: 10 }],
+      transactions: [
+        ...base.transactions,
+        {
+          id: "p",
+          description: "compra",
+          amount: 80,
+          type: "despesa",
+          category: "Compras",
+          accountId: "",
+          cardId: "c",
+          date: "2026-11-01",
+          paymentMethod: "Cartão de crédito",
+          status: "pendente",
+        },
+      ],
+    };
+    expect(exceedsCardLimit(state, "c", 30)).toBe(true);
+    expect(exceedsCardLimit(state, "c", 20)).toBe(false);
+    expect(exceedsCardLimit(state, "c", 30, "p")).toBe(false);
+  });
+  it("keeps report totals after an account is archived", () => {
+    const archived: FinanceState = {
+      ...base,
+      accounts: base.accounts.map((account) =>
+        account.id === "a" ? { ...account, archived: true } : account,
+      ),
+    };
+    expect(monthTotals(archived, "2026-10")).toEqual(monthTotals(base, "2026-10"));
+    expect(accountBalance(archived, "a")).toBe(accountBalance(base, "a"));
+    expect(selectableAccounts(archived).map((account) => account.id)).toEqual(["b"]);
+  });
+  it("adds a custom category once", () => {
+    const next = withCustomCategory(base, "despesa", "Pet");
+    expect(categoriesFor(next, "despesa")).toContain("Pet");
+    expect(withCustomCategory(next, "despesa", "pet")).toBe(next);
   });
 });

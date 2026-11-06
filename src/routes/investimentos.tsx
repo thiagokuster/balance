@@ -25,6 +25,7 @@ import {
   hasUnlinkedContributions,
   investedTotal,
   investmentValue,
+  selectableAccounts,
   today,
   totalInvested,
   uid,
@@ -231,7 +232,7 @@ function Page() {
                           id: inv.id,
                           amount: "",
                           date: today(),
-                          accountId: s.accounts[0]?.id ?? "",
+                          accountId: selectableAccounts(s)[0]?.id ?? "",
                         })
                       }
                     >
@@ -245,7 +246,7 @@ function Page() {
                           id: inv.id,
                           amount: "",
                           date: today(),
-                          accountId: s.accounts[0]?.id ?? "",
+                          accountId: selectableAccounts(s)[0]?.id ?? "",
                         })
                       }
                     >
@@ -400,7 +401,7 @@ function Page() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Não debitar nenhuma conta</SelectItem>
-                  {s.accounts.map((account) => (
+                  {selectableAccounts(s).map((account) => (
                     <SelectItem key={account.id} value={account.id}>
                       {account.name}
                     </SelectItem>
@@ -449,7 +450,7 @@ function Page() {
                   <SelectValue placeholder="Escolha a conta" />
                 </SelectTrigger>
                 <SelectContent>
-                  {s.accounts.map((account) => (
+                  {selectableAccounts(s).map((account) => (
                     <SelectItem key={account.id} value={account.id}>
                       {account.name}
                     </SelectItem>
@@ -460,7 +461,7 @@ function Page() {
             <p className="text-sm text-muted-foreground">
               O valor sai do investimento e entra na conta. O patrimônio total não muda.
             </p>
-            <Button type="submit" disabled={s.accounts.length === 0}>
+            <Button type="submit" disabled={selectableAccounts(s).length === 0}>
               Registrar resgate
             </Button>
           </form>

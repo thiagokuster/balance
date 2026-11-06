@@ -21,13 +21,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { parseMoney } from "@/lib/money";
 import {
-  EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
   PAYMENT_METHODS,
   addTransaction,
+  brl,
+  cardAvailable,
+  categoriesFor,
+  exceedsCardLimit,
+  selectableAccounts,
+  selectableCards,
   today,
   update,
   useFinance,
+  withCustomCategory,
   type Transaction,
   type TxType,
 } from "@/lib/finance";
@@ -64,6 +69,7 @@ export function TransactionDialog({
     installments: "1",
   };
   const [f, setF] = useState(blank);
+  const [draftCategory, setDraftCategory] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -80,7 +86,7 @@ export function TransactionDialog({
     else
       setF({
         ...blank,
-        accountId: s.accounts[0]?.id ?? "",
+        accountId: selectableAccounts(s)[0]?.id ?? "",
         paymentMethod: defaults?.paymentMethod ?? blank.paymentMethod,
         cardId: defaults?.cardId ?? "",
       });
@@ -89,7 +95,11 @@ export function TransactionDialog({
 
   const set = (k: keyof typeof f, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
   const isCard = f.type === "despesa" && f.paymentMethod === "Cartão de crédito";
-  const cats = f.type === "receita" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  const cats = categoriesFor(s, f.type);
+  const amountNow = parseMoney(String(f.amount));
+  const selectedCard = isCard ? s.cards.find((item) => item.id === f.cardId) : undefined;
+  const room = selectedCard ? cardAvailable(s, selectedCard, edit?.id) : 0;
+  const overLimit = isCard && !!f.cardId && exceedsCardLimit(s, f.cardId, amountNow, edit?.id);
 
   function submit(e: React.FormEvent): void {
     e.preventDefault();
@@ -110,6 +120,12 @@ export function TransactionDialog({
       toast.error(isCard ? "Escolha o cartão." : "Escolha a conta.");
       return;
     }
+    if (
+      isCard &&
+      exceedsCardLimit(s, f.cardId, amount, edit?.id) &&
+      !confirm("Essa compra passa do limite disponível do cartão. Lançar mesmo assim?")
+    )
+      return;
     const status = isCard
       ? (edit?.status ?? "pendente")
       : f.type === "receita" && f.status === "pago"
@@ -203,6 +219,33 @@ export function TransactionDialog({
                   ))}
                 </SelectContent>
               </Select>
+              <div className="flex gap-2">
+                <Input
+                  value={draftCategory}
+                  maxLength={40}
+                  placeholder="Nova categoria"
+                  onChange={(e) => setDraftCategory(e.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const name = draftCategory.trim();
+                    if (!name) return;
+                    const next = withCustomCategory(s, f.type, name);
+                    if (next !== s) update(() => next);
+                    const chosen =
+                      categoriesFor(next, f.type).find(
+                        (item) =>
+                          item.toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"),
+                      ) ?? name;
+                    set("category", chosen);
+                    setDraftCategory("");
+                  }}
+                >
+                  Criar
+                </Button>
+              </div>
             </div>
             <div className="grid gap-1.5">
               <Label>Forma de pagamento</Label>
@@ -231,7 +274,7 @@ export function TransactionDialog({
                     <SelectValue placeholder={s.cards.length ? "Escolha" : "Cadastre um cartão"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {s.cards.map((c) => (
+                    {selectableCards(s, f.cardId).map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
                       </SelectItem>
@@ -263,7 +306,7 @@ export function TransactionDialog({
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {s.accounts.map((c) => (
+                    {selectableAccounts(s, f.accountId).map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
                       </SelectItem>
@@ -302,6 +345,11 @@ export function TransactionDialog({
             Repete todo mês (aparece no calendário)
             <Switch checked={f.recurring} onCheckedChange={(v) => set("recurring", v)} />
           </label>
+          {overLimit && (
+            <p className="text-sm text-warning">
+              Essa compra passa do limite. Disponível: {brl(room)}.
+            </p>
+          )}
           <Button type="submit" className="w-full">
             {edit ? "Salvar" : "Adicionar"}
           </Button>

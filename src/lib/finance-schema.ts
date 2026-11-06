@@ -11,6 +11,7 @@ const account = z.object({
   name: label,
   type: z.enum(["corrente", "poupanca", "dinheiro", "investimentos"]),
   initialBalance: money,
+  archived: z.boolean().optional(),
 });
 
 const transaction = z.object({
@@ -45,6 +46,7 @@ const card = z.object({
   limit: z.number().finite().positive().max(1e12),
   closingDay: z.number().int().min(1).max(31),
   dueDay: z.number().int().min(1).max(31),
+  archived: z.boolean().optional(),
 });
 
 const goal = z.object({
@@ -79,6 +81,12 @@ const financeStateSchema = z.object({
   investments: z.array(investment).max(200),
   monthlyBudget: z.number().finite().min(0).max(1e12),
   categoryLimits: z.record(z.string().min(1).max(40), z.number().finite().min(0).max(1e12)),
+  customCategories: z
+    .object({
+      receita: z.array(z.string().trim().min(1).max(40)).max(100),
+      despesa: z.array(z.string().trim().min(1).max(40)).max(100),
+    })
+    .optional(),
 });
 
 /** Rejects unexpected shapes from localStorage instead of spreading them into state. */

@@ -14,14 +14,7 @@ import {
 } from "@/components/ui/select";
 import { EmptyState, Money, PageHeader } from "@/components/app-shell";
 import { TransactionDialog } from "@/components/transaction-dialog";
-import {
-  EXPENSE_CATEGORIES,
-  INCOME_CATEGORIES,
-  fmtDate,
-  update,
-  useFinance,
-  type Transaction,
-} from "@/lib/finance";
+import { categoriesFor, fmtDate, update, useFinance, type Transaction } from "@/lib/finance";
 
 export const Route = createFileRoute("/movimentacoes")({
   head: () => ({
@@ -130,11 +123,13 @@ function Page() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Todas categorias</SelectItem>
-            {[...new Set([...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES])].map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
+            {[...new Set([...categoriesFor(s, "receita"), ...categoriesFor(s, "despesa")])].map(
+              (c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ),
+            )}
           </SelectContent>
         </Select>
         <Select value={acc} onValueChange={setAcc}>
@@ -145,12 +140,12 @@ function Page() {
             <SelectItem value={ALL}>Todas as contas e cartões</SelectItem>
             {s.accounts.map((a) => (
               <SelectItem key={a.id} value={a.id}>
-                {a.name}
+                {a.archived ? `${a.name} (arquivada)` : a.name}
               </SelectItem>
             ))}
             {s.cards.map((a) => (
               <SelectItem key={a.id} value={a.id}>
-                💳 {a.name}
+                💳 {a.archived ? `${a.name} (arquivado)` : a.name}
               </SelectItem>
             ))}
           </SelectContent>

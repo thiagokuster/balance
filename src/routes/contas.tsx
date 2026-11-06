@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import {
+  Archive,
   ArrowRightLeft,
   Banknote,
   Landmark,
@@ -34,6 +35,7 @@ import {
   accountBalance,
   brl,
   fmtDate,
+  selectableAccounts,
   today,
   totalBalance,
   transferPartyName,
@@ -125,15 +127,34 @@ function Page() {
     setTr({ fromId: "", toId: "", amount: "", date: today(), note: "" });
     toast.success("Transferência registrada");
   }
-  function remove(id: string) {
-    const used =
-      s.transactions.some((t) => t.accountId === id) ||
-      s.transfers.some((t) => t.fromId === id || t.toId === id);
+  function archive(id: string) {
     if (
       !confirm(
-        used
-          ? "Excluir esta conta apaga o saldo e todas as movimentações ligadas a ela. Dá para desfazer em seguida."
-          : "Excluir esta conta? Dá para desfazer em seguida.",
+        "Arquivar tira a conta dos lançamentos novos. O saldo e o histórico continuam nos relatórios.",
+      )
+    )
+      return;
+    update((st) => ({
+      ...st,
+      accounts: st.accounts.map((account) =>
+        account.id === id ? { ...account, archived: true } : account,
+      ),
+    }));
+    toast.success("Conta arquivada. O histórico continua nos relatórios.");
+  }
+  function unarchive(id: string) {
+    update((st) => ({
+      ...st,
+      accounts: st.accounts.map((account) =>
+        account.id === id ? { ...account, archived: false } : account,
+      ),
+    }));
+    toast.success("Conta de volta à lista.");
+  }
+  function remove(id: string) {
+    if (
+      !confirm(
+        "Apagar o histórico remove a conta e as movimentações ligadas a ela dos relatórios. Dá para desfazer em seguida.",
       )
     )
       return;
@@ -144,7 +165,7 @@ function Page() {
       transactions: st.transactions.filter((t) => t.accountId !== id),
       transfers: st.transfers.filter((t) => t.fromId !== id && t.toId !== id),
     }));
-    toast("Conta excluída", {
+    toast("Histórico da conta apagado", {
       duration: 8000,
       action: { label: "Desfazer", onClick: () => replaceAll(snapshot) },
     });
@@ -154,7 +175,7 @@ function Page() {
       <PageHeader title="Contas" subtitle={`Saldo consolidado: ${brl(totalBalance(s))}`}>
         <Dialog open={tOpen} onOpenChange={setTOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline" disabled={s.accounts.length < 2}>
+            <Button variant="outline" disabled={selectableAccounts(s).length < 2}>
               <ArrowRightLeft className="h-4 w-4" />
               Transferir
             </Button>
@@ -175,7 +196,7 @@ function Page() {
                       <SelectValue placeholder="Escolha" />
                     </SelectTrigger>
                     <SelectContent>
-                      {s.accounts.map((x) => (
+                      {selectableAccounts(s).map((x) => (
                         <SelectItem key={x.id} value={x.id}>
                           {x.name} · {brl(accountBalance(s, x.id))}
                         </SelectItem>
@@ -268,32 +289,71 @@ function Page() {
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {s.accounts.map((x) => {
-            const I = icons[x.type];
-            return (
-              <div key={x.id} className="panel panel-glow fade-up group p-5">
-                <div className="flex items-start justify-between">
-                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-primary">
-                    <I className="h-5 w-5" />
+          {s.accounts.every((account) => account.archived) && (
+            <p className="text-sm text-muted-foreground sm:col-span-2 xl:col-span-4">
+              Nenhuma conta ativa. As arquivadas continuam nos relatórios.
+            </p>
+          )}
+          {s.accounts
+            .filter((account) => !account.archived)
+            .map((x) => {
+              const I = icons[x.type];
+              return (
+                <div key={x.id} className="panel panel-glow fade-up group p-5">
+                  <div className="flex items-start justify-between">
+                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-primary">
+                      <I className="h-5 w-5" />
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => archive(x.id)}
+                      aria-label="Arquivar conta"
+                    >
+                      <Archive className="h-4 w-4" />
+                    </Button>
                   </div>
+                  <p className="mt-4 font-medium">{x.name}</p>
+                  <p className="text-xs text-muted-foreground">{ACCOUNT_LABEL[x.type]}</p>
+                  <p className="mt-3 font-display text-2xl font-semibold tabular-nums">
+                    {brl(accountBalance(s, x.id))}
+                  </p>
+                </div>
+              );
+            })}
+        </div>
+      )}
+
+      {s.accounts.some((account) => account.archived) && (
+        <div className="mt-6">
+          <h3 className="mb-3 font-semibold">Arquivadas</h3>
+          <ul className="panel divide-y divide-border">
+            {s.accounts
+              .filter((account) => account.archived)
+              .map((account) => (
+                <li
+                  key={account.id}
+                  className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm"
+                >
+                  <span className="min-w-0 flex-1 font-medium">{account.name}</span>
+                  <span className="tabular-nums">{brl(accountBalance(s, account.id))}</span>
+                  <Button variant="outline" size="sm" onClick={() => unarchive(account.id)}>
+                    Desarquivar
+                  </Button>
                   <Button
-                    size="icon"
                     variant="ghost"
-                    className="opacity-0 group-hover:opacity-100"
-                    onClick={() => remove(x.id)}
-                    aria-label="Excluir conta"
+                    size="icon"
+                    onClick={() => remove(account.id)}
+                    aria-label="Apagar histórico da conta"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                </div>
-                <p className="mt-4 font-medium">{x.name}</p>
-                <p className="text-xs text-muted-foreground">{ACCOUNT_LABEL[x.type]}</p>
-                <p className="mt-3 font-display text-2xl font-semibold tabular-nums">
-                  {brl(accountBalance(s, x.id))}
-                </p>
-              </div>
-            );
-          })}
+                </li>
+              ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Arquivar não apaga relatórios. Apagar o histórico remove as movimentações dessa conta.
+          </p>
         </div>
       )}
 

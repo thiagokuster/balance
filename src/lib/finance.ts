@@ -21,6 +21,7 @@ export interface Account {
   name: string;
   type: AccountType;
   initialBalance: number;
+  archived?: boolean;
 }
 export interface Transaction {
   id: string;
@@ -52,6 +53,11 @@ export interface Card {
   limit: number;
   closingDay: number;
   dueDay: number;
+  archived?: boolean;
+}
+export interface CustomCategories {
+  receita: string[];
+  despesa: string[];
 }
 export interface Goal {
   id: string;
@@ -78,6 +84,7 @@ export interface FinanceState {
   investments: Investment[];
   monthlyBudget: number;
   categoryLimits: Record<string, number>;
+  customCategories?: CustomCategories;
 }
 
 export const INCOME_CATEGORIES = [
@@ -117,6 +124,7 @@ export const ACCOUNT_LABEL: Record<AccountType, string> = {
 };
 
 const KEY = "financas-pessoais-v1";
+const CHANGED_KEY = "saldo-alterado-em";
 const LEGACY_HASH_KEY = "financas-pin-hash";
 const DECLINE_KEY = "saldo-sem-senha";
 const BACKUP_AT_KEY = "saldo-ultimo-backup";
@@ -209,9 +217,13 @@ function persist(snapshot: FinanceState): Promise<void> {
     if (current) {
       localStorage.setItem(KEY, JSON.stringify(await sealState(snapshot, current)));
       localStorage.removeItem(LEGACY_HASH_KEY);
+    } else if (!protectedAtRest) {
+      localStorage.setItem(KEY, JSON.stringify(snapshot));
+    } else {
       return;
     }
-    if (!protectedAtRest) localStorage.setItem(KEY, JSON.stringify(snapshot));
+    localStorage.setItem(CHANGED_KEY, new Date().toISOString());
+    void import("./device-sync").then((mod) => mod.pushLinkedSync());
   });
   writeQueue = job.catch((error: unknown) => {
     console.error(error);
@@ -333,7 +345,12 @@ export async function downloadEncryptedBackup(password?: string) {
     }
     active = await createSession(password);
   }
-  const payload = { app: "saldo", version: 2, sealed: await sealState(state, active) };
+  const payload = {
+    app: "saldo",
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    sealed: await sealState(state, active),
+  };
   download(`saldo-backup-${today()}.json`, JSON.stringify(payload), "application/json");
   markBackup();
 }
@@ -599,11 +616,71 @@ export function cardDebt(s: FinanceState, until = "9999-12-31") {
       .reduce((a, t) => a + cents(t.amount), 0),
   );
 }
-export function cardAvailable(s: FinanceState, card: Card) {
+export function cardAvailable(s: FinanceState, card: Card, exceptId?: string) {
   const used = s.transactions
-    .filter((t) => t.cardId === card.id && t.status === "pendente")
+    .filter((t) => t.cardId === card.id && t.status === "pendente" && t.id !== exceptId)
     .reduce((a, t) => a + cents(t.amount), 0);
   return reais(cents(card.limit) - used);
+}
+
+/** True when a new or edited card purchase would leave the available limit negative. */
+export function exceedsCardLimit(
+  s: FinanceState,
+  cardId: string,
+  amount: number,
+  exceptId?: string,
+) {
+  const card = s.cards.find((item) => item.id === cardId);
+  if (!card || !(amount > 0)) return false;
+  return cents(amount) > cents(cardAvailable(s, card, exceptId));
+}
+
+export function selectableAccounts(s: FinanceState, currentId = "") {
+  return s.accounts.filter((account) => !account.archived || account.id === currentId);
+}
+
+export function selectableCards(s: FinanceState, currentId = "") {
+  return s.cards.filter((card) => !card.archived || card.id === currentId);
+}
+
+export function categoriesFor(s: FinanceState, type: TxType) {
+  const base = type === "receita" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  const extra = s.customCategories?.[type] ?? [];
+  const names = new Map<string, string>();
+  for (const name of [...base, ...extra]) {
+    const key = name.trim().toLocaleLowerCase("pt-BR");
+    if (key && !names.has(key)) names.set(key, name.trim());
+  }
+  return [...names.values()];
+}
+
+export function withCustomCategory(s: FinanceState, type: TxType, raw: string) {
+  const name = raw.trim().slice(0, 40);
+  if (!name) return s;
+  if (
+    categoriesFor(s, type).some(
+      (item) => item.toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"),
+    )
+  )
+    return s;
+  const current = s.customCategories ?? { receita: [], despesa: [] };
+  return {
+    ...s,
+    customCategories: {
+      receita: type === "receita" ? [...current.receita, name].slice(0, 100) : current.receita,
+      despesa: type === "despesa" ? [...current.despesa, name].slice(0, 100) : current.despesa,
+    },
+  };
+}
+
+export function storageSnapshot() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(KEY);
+}
+
+export function changedAt() {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(CHANGED_KEY) ?? "";
 }
 
 export interface CardInvoice {
@@ -856,12 +933,15 @@ export function calendarEvents(s: FinanceState, month: string): CalEvent[] {
       amount: t.amount,
     });
   }
-  for (const c of s.cards)
+  for (const c of s.cards) {
+    const pending = s.transactions.some((t) => t.cardId === c.id && t.status === "pendente");
+    if (c.archived && !pending) continue;
     events.push({
       date: dayInMonth(month, c.dueDay),
       title: `Vencimento ${c.name}`,
       kind: "cartao",
     });
+  }
   return events.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
 }
 

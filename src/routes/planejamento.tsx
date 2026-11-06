@@ -17,8 +17,8 @@ import {
 import { EmptyState, PageHeader } from "@/components/app-shell";
 import { parseMoney } from "@/lib/money";
 import {
-  EXPENSE_CATEGORIES,
   brl,
+  categoriesFor,
   expensesByCategory,
   fmtDate,
   monthKey,
@@ -87,7 +87,7 @@ function Page() {
       return;
     }
     const categoryLimits: Record<string, number> = {};
-    for (const cat of EXPENSE_CATEGORIES) {
+    for (const cat of categoriesFor(s, "despesa")) {
       const raw = limitValues[cat]?.trim() ?? "";
       if (!raw) continue;
       const value = num(raw);
@@ -182,7 +182,7 @@ function Page() {
         <div className="panel p-5 lg:col-span-2">
           <h2 className="font-semibold">Limites por categoria</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            {EXPENSE_CATEGORIES.map((cat) => {
+            {categoriesFor(s, "despesa").map((cat) => {
               const used = spent.find((c) => c.name === cat)?.value ?? 0;
               const limit = s.categoryLimits[cat] ?? 0;
               const pct = limit > 0 ? (used / limit) * 100 : 0;

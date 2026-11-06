@@ -108,8 +108,14 @@ export function exportPdf(
 
 export const MAX_BACKUP_BYTES = 8 * 1024 * 1024;
 
-export type BackupContents =
-  { kind: "plain"; state: FinanceState } | { kind: "sealed"; payload: VaultPayload };
+export type BackupContents = { exportedAt?: string } & (
+  { kind: "plain"; state: FinanceState } | { kind: "sealed"; payload: VaultPayload }
+);
+
+function exportedAtOf(record: object) {
+  const value = (record as { exportedAt?: unknown }).exportedAt;
+  return typeof value === "string" && value.length <= 40 ? value : undefined;
+}
 
 export function readBackup(text: string): BackupContents | null {
   if (text.length > MAX_BACKUP_BYTES) return null;
@@ -117,11 +123,17 @@ export function readBackup(text: string): BackupContents | null {
     const json: unknown = JSON.parse(text.replace(/^\uFEFF/, ""));
     if (typeof json !== "object" || json === null) return null;
     const record = json as { app?: unknown; state?: unknown; sealed?: unknown };
+    const exportedAt = exportedAtOf(record);
     if (record.app === "saldo" && isEncryptedVault(record.sealed)) {
-      return { kind: "sealed", payload: record.sealed };
+      return exportedAt
+        ? { kind: "sealed", payload: record.sealed, exportedAt }
+        : { kind: "sealed", payload: record.sealed };
     }
     const plain = parseFinanceState(record.app === "saldo" ? record.state : json);
-    return plain ? { kind: "plain", state: plain } : null;
+    if (!plain) return null;
+    return exportedAt
+      ? { kind: "plain", state: plain, exportedAt }
+      : { kind: "plain", state: plain };
   } catch {
     return null;
   }
