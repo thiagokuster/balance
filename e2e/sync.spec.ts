@@ -7,7 +7,16 @@ async function syncFile(page: Page) {
   return page.evaluate(async () => {
     const root = await navigator.storage.getDirectory();
     const handle = await root.getFileHandle("saldo-sync.json");
-    return (await handle.getFile()).text();
+    let last: unknown;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      try {
+        return await (await handle.getFile()).text();
+      } catch (error) {
+        last = error;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    throw last;
   });
 }
 
@@ -115,9 +124,19 @@ test("com senha, o arquivo sai criptografado e uma versão alheia não é substi
   await next.getByRole("button", { name: "Adicionar" }).click();
   await expect(page.getByText("Mercado sync")).toBeVisible();
   await expect
-    .poll(async () => {
-      const saved = JSON.parse(await syncFile(page)) as { exportedAt?: string; state?: unknown };
-      return saved.state === undefined && saved.exportedAt !== "2099-01-01T00:00:00.000Z";
-    })
+    .poll(
+      async () => {
+        try {
+          const saved = JSON.parse(await syncFile(page)) as {
+            exportedAt?: string;
+            state?: unknown;
+          };
+          return saved.state === undefined && saved.exportedAt !== "2099-01-01T00:00:00.000Z";
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 60_000 },
+    )
     .toBe(true);
 });

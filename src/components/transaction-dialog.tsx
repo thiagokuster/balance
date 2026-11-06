@@ -95,7 +95,14 @@ export function TransactionDialog({
 
   const set = (k: keyof typeof f, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
   const isCard = f.type === "despesa" && f.paymentMethod === "Cartão de crédito";
-  const cats = categoriesFor(s, f.type);
+  const knownCategories = categoriesFor(s, f.type);
+  const cats =
+    f.category &&
+    !knownCategories.some(
+      (item) => item.toLocaleLowerCase("pt-BR") === f.category.toLocaleLowerCase("pt-BR"),
+    )
+      ? [...knownCategories, f.category]
+      : knownCategories;
   const amountNow = parseMoney(String(f.amount));
   const selectedCard = isCard ? s.cards.find((item) => item.id === f.cardId) : undefined;
   const room = selectedCard ? cardAvailable(s, selectedCard, edit?.id) : 0;
@@ -207,7 +214,12 @@ export function TransactionDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label>Categoria</Label>
-              <Select value={f.category} onValueChange={(v) => set("category", v)}>
+              <Select
+                value={f.category}
+                onValueChange={(v) => {
+                  if (v) set("category", v);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Escolha" />
                 </SelectTrigger>
