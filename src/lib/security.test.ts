@@ -194,6 +194,8 @@ describe("saída e cabeçalhos", () => {
     expect(https["X-Content-Type-Options"]).toBe("nosniff");
     expect(https["X-Frame-Options"]).toBe("DENY");
     expect(https["Strict-Transport-Security"]).toContain("max-age=31536000");
+    expect(https["X-Robots-Tag"]).toBe("noindex");
+    expect(http["X-Robots-Tag"]).toBe("noindex");
     expect(http["Strict-Transport-Security"]).toBeUndefined();
     expect(http["Content-Security-Policy"]).toContain("unsafe-eval");
   });

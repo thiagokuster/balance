@@ -73,6 +73,11 @@ const DB = "saldo-sync";
 const STORE = "handles";
 const HANDLE_KEY = "file";
 const SEEN_KEY = "saldo-sync-visto";
+let liveHandle: SyncHandle | null = null;
+
+async function currentHandle() {
+  return liveHandle ?? (await getHandle());
+}
 
 function seenRevision() {
   if (typeof localStorage === "undefined") return "";
@@ -102,6 +107,11 @@ function openDb() {
 }
 
 async function putHandle(handle: SyncHandle) {
+  try {
+    structuredClone(handle);
+  } catch {
+    return;
+  }
   const database = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = database.transaction(STORE, "readwrite");
@@ -176,6 +186,7 @@ export async function linkSyncFile() {
     suggestedName: "saldo-sync.json",
     types: [{ description: "Backup do Saldo", accept: { "application/json": [".json"] } }],
   });
+  liveHandle = handle;
   await putHandle(handle);
   await writeHandle(handle);
 }
@@ -184,7 +195,7 @@ export async function linkSyncFile() {
 export async function pushLinkedSync() {
   if (typeof indexedDB === "undefined") return;
   try {
-    const handle = await getHandle();
+    const handle = await currentHandle();
     if (!handle || !(await permitted(handle, false))) return;
     await writeHandle(handle);
   } catch (error) {
@@ -194,14 +205,14 @@ export async function pushLinkedSync() {
 }
 
 export async function readLinkedSync() {
-  const handle = await getHandle();
+  const handle = await currentHandle();
   if (!handle || !(await permitted(handle, true))) return null;
   return (await handle.getFile()).text();
 }
 
 export async function linkedFileIsNewer() {
   try {
-    const handle = await getHandle();
+    const handle = await currentHandle();
     if (!handle || !(await permitted(handle, false))) return false;
     const parsed = readBackup(await (await handle.getFile()).text());
     return parsed ? syncIsNewer(parsed.exportedAt ?? "", changedAt()) : false;

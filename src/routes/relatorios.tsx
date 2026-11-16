@@ -273,7 +273,8 @@ function Page() {
           O Saldo não envia lançamentos para um servidor. O backup criptografado pode ficar numa
           pasta do Drive, OneDrive ou Dropbox e ser restaurado no outro aparelho. Vincular esse
           arquivo, para ele acompanhar as mudanças, exige a senha do aplicativo. Se ele mudar em
-          outro aparelho, este navegador não grava por cima.
+          outro aparelho, este navegador não grava por cima. Se o arquivo escolhido já tiver dados,
+          o vínculo fica criado, mas a gravação espera Trazer arquivo vinculado.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {canLinkSyncFile() && (

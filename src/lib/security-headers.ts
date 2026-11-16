@@ -15,6 +15,7 @@ export function securityHeaders(requestUrl: string, isProd: boolean): Record<str
     "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Resource-Policy": "same-origin",
     "X-Permitted-Cross-Domain-Policies": "none",
+    "X-Robots-Tag": "noindex",
   };
   if (https) headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
   return headers;
