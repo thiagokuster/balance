@@ -1,4 +1,4 @@
-import { changedAt, storageSnapshot } from "./finance";
+import { changedAt, flushVaultWrites, storageSnapshot } from "./finance";
 import { readBackup } from "./export";
 import { isEncryptedVault } from "./vault";
 
@@ -144,7 +144,18 @@ async function permitted(handle: SyncHandle, ask: boolean) {
   return (await handle.requestPermission(mode)) === "granted";
 }
 
+let linkedWrites: Promise<unknown> = Promise.resolve();
+
 async function writeHandle(handle: SyncHandle) {
+  const run = linkedWrites.then(() => writeLinkedFile(handle));
+  linkedWrites = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function writeLinkedFile(handle: SyncHandle) {
   const raw = storageSnapshot();
   if (!raw) return;
   let json: unknown;
@@ -180,6 +191,7 @@ export async function linkSyncFile() {
     json = null;
   }
   if (!isEncryptedVault(json)) throw new Error(SYNC_PASSWORD_MESSAGE);
+  await flushVaultWrites();
   const picker = window as PickerWindow;
   if (!picker.showSaveFilePicker) throw new Error("sync-unsupported");
   const handle = await picker.showSaveFilePicker({

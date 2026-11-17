@@ -223,7 +223,8 @@ function persist(snapshot: FinanceState): Promise<void> {
       return;
     }
     localStorage.setItem(CHANGED_KEY, new Date().toISOString());
-    void import("./device-sync").then((mod) => mod.pushLinkedSync());
+    const sync = await import("./device-sync");
+    await sync.pushLinkedSync();
   });
   writeQueue = job.catch((error: unknown) => {
     console.error(error);

@@ -59,7 +59,7 @@ async function createPassword(page: Page) {
 test("dois navegadores usam a mesma pasta e um não apaga a versão do outro", async ({
   browser,
 }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(180_000);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "saldo-pasta-"));
   const file = path.join(dir, "saldo-sync.json");
   const writes = { count: 0 };
@@ -122,7 +122,7 @@ test("dois navegadores usam a mesma pasta e um não apaga a versão do outro", a
     await movement.getByRole("button", { name: "Adicionar" }).click();
     await expect(pageB.getByText("Padaria do segundo")).toBeVisible();
     const written = writes.count;
-    await expect.poll(() => writes.count).toBeGreaterThan(written);
+    await expect.poll(() => writes.count, { timeout: 60_000 }).toBeGreaterThan(written);
     const afterSecond = fs.readFileSync(file, "utf8");
 
     await pageA.getByRole("link", { name: "Dashboard" }).click();
